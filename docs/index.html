@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RoboWallet | The Solana Machine Economy SDK</title>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Clash+Display:wght@400;600;700&family=Inter:wght@300;400;600&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    
+    <div class="grid-overlay"></div>
+    <div class="glow-orb solana-purple"></div>
+    <div class="glow-orb caution-yellow"></div>
+    <div class="hero-banner-bg"></div>
+
+    <nav class="navbar">
+        <div class="nav-logo">
+            <img src="assets/logo.png" alt="Logo" class="logo-img">
+            <span class="logo-text">RoboWallet<span class="accent">.</span></span>
+        </div>
+        <div class="nav-links">
+            <a href="#docs">Docs</a>
+            <a href="#hardware">Hardware</a>
+            <a href="https://github.com/SolM2M-Labs/robowallet-core" target="_blank" class="nav-btn">GitHub</a>
+        </div>
+    </nav>
+
+    <main class="hero-section">
+        <div class="hero-content">
+            <div class="badge">🔥 STRICTLY NO_STD RUST</div>
+            <h1 class="hero-title">The Machine<br>Economy is Here.</h1>
+            <p class="hero-subtitle">
+                A military-grade, zero-allocation embedded SDK that turns $5 microcontrollers into autonomous economic agents on the Solana blockchain.
+            </p>
+            
+            <div class="hero-cta-group">
+                <a href="#start" class="btn-primary">Initialize SDK</a>
+                <a href="#terminal" class="btn-secondary">View Documentation</a>
+            </div>
+            
+            <div class="tech-stack">
+                <span>Backed By:</span>
+                <div class="tech-logos">
+                    <span>Rust</span>
+                    <span class="separator">•</span>
+                    <span>ESP32</span>
+                    <span class="separator">•</span>
+                    <span>Solana</span>
+                    <span class="separator">•</span>
+                    <span>ATECC608</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="hero-visual">
+            <div class="terminal-window">
+                <div class="terminal-header">
+                    <span class="dot red"></span>
+                    <span class="dot yellow"></span>
+                    <span class="dot green"></span>
+                    <span class="terminal-title">robowallet@esp32: ~/core</span>
+                </div>
+                <div class="terminal-body" id="terminal-text">
+                    <p><span class="prompt">>></span> boot sequence initiated...</p>
+                    <p><span class="prompt">>></span> loading esp-hal (risc-v)... <span class="success">[OK]</span></p>
+                    <p><span class="prompt">>></span> generating ed25519 keypair... <span class="success">[OK]</span></p>
+                    <p><span class="prompt">>></span> solana address: <span class="accent">4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R</span></p>
+                    <p><span class="prompt">>></span> building transfer 5,000,000 lamports... <span class="success">[SIGNED]</span></p>
+                    <p class="blink-cursor">_</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <section class="features-section">
+        <h2 class="section-title">Built for Hardware.</h2>
+        <div class="features-grid">
+            <div class="feature-card">
+                <div class="icon">⚡</div>
+                <h3>Zero Allocations</h3>
+                <p>Pure `no_std` Rust. No heap memory, no crashes. Built specifically for resource-constrained devices like the ESP32-C3.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon">🔒</div>
+                <h3>Hardware Security</h3>
+                <p>Native integration with ATECC608 secure elements. Private keys never touch the main application processor.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon">🤖</div>
+                <h3>DePIN Ready</h3>
+                <p>Verify your IoT node, join the machine network, and start transacting autonomously on the fastest blockchain in the world.</p>
+            </div>
+        </div>
+    </section>
+
+</body>
+</html>
