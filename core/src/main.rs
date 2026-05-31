@@ -4,10 +4,10 @@
 mod crypto;
 mod transaction;
 mod ffi;
+mod rpc;
 
-use esp_backtrace as _;
-use esp_println::println;
-use esp_hal::{clock::ClockControl, peripherals::Peripherals, prelude::*, Delay};
+use panic_halt as _;
+use esp_hal::{clock::ClockControl, peripherals::Peripherals, prelude::*, delay::Delay};
 use crate::crypto::RoboKeypair;
 use crate::transaction::SolTransferTx;
 
@@ -19,9 +19,6 @@ fn main() -> ! {
     let clocks = ClockControl::max(system.clock_control).freeze();
     let mut delay = Delay::new(&clocks);
 
-    println!("🤖 RoboWallet SDK Core Initialized");
-    println!("Architecture: ESP32-C3 (RISC-V)");
-    
     // Initialize Phase 2: Cryptography & Wallet Generation
     let keypair = RoboKeypair::generate_test_keypair();
     keypair.print_wallet_info();
@@ -42,7 +39,7 @@ fn main() -> ! {
     tx.sign_and_build(&keypair.secret);
 
     loop {
-        println!("RoboWallet OTQ (Offline Tx Queue) Polling...");
-        delay.delay_ms(10000u32);
+        // RoboWallet OTQ (Offline Tx Queue) Polling...
+        delay.delay_millis(10000u32);
     }
 }

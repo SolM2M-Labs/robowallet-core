@@ -2,8 +2,6 @@
 //! Hand-optimized binary layout for bare-metal M2M transactions.
 
 use ed25519_dalek::{SigningKey, Signer};
-use bs58;
-use esp_println::println;
 
 /// A lightweight, stack-allocated representation of a Solana Transfer Transaction
 pub struct SolTransferTx {
@@ -49,23 +47,12 @@ impl SolTransferTx {
     }
 
     /// Signs the serialized message using the hardware or software key
-    pub fn sign_and_build(&self, signing_key: &SigningKey) {
+    pub fn sign_and_build(&self, secret_key: &SigningKey) {
         let mut msg_buffer = [0u8; 256]; // Stack allocated buffer
         let msg_len = self.serialize_message(&mut msg_buffer);
         
-        // Compute Ed25519 signature
-        let signature = signing_key.sign(&msg_buffer[..msg_len]);
-        
-        println!("--------------------------------------------------");
-        println!("🚀 M2M TRANSACTION BUILT & SIGNED");
-        println!("--------------------------------------------------");
-        println!("Amount: {} Lamports", self.amount_lamports);
-        
-        // Print part of the signature in hex for verification
-        let sig_bytes = signature.to_bytes();
-        println!("Signature: {:02x}{:02x}{:02x}{:02x}...{:02x}{:02x}", 
-            sig_bytes[0], sig_bytes[1], sig_bytes[2], sig_bytes[3], sig_bytes[62], sig_bytes[63]);
-        println!("Status: Ready for RPC broadcast");
-        println!("--------------------------------------------------");
+        let _signature = secret_key.sign(&msg_buffer[..msg_len]);
+        // In a real implementation, we would append the signature to the transaction buffer
+        // For MVP, we are just demonstrating the no_std signing works!
     }
 }

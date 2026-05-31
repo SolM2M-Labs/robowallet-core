@@ -12,22 +12,17 @@ pub extern "C" fn rw_generate_test_wallet(out_address_buffer: *mut u8, buffer_le
 
     let keypair = RoboKeypair::generate_test_keypair();
     let mut b58_buffer = [0u8; 64];
-    let address = keypair.get_solana_address(&mut b58_buffer);
+    let len = keypair.get_pubkey_string(&mut b58_buffer).unwrap_or(0);
 
     // Unsafe block to write back to the C-allocated pointer
     unsafe {
-        let out_slice = core::slice::from_raw_parts_mut(out_address_buffer, buffer_len);
-        let address_bytes = address.as_bytes();
-        let len = address_bytes.len();
+        let max_len = core::cmp::min(len, buffer_len);
+        let src_ptr = b58_buffer.as_ptr();
+        core::ptr::copy_nonoverlapping(src_ptr, out_address_buffer, max_len);
         
-        if len > buffer_len {
-            return -1;
-        }
-        
-        out_slice[..len].copy_from_slice(address_bytes);
-        // Null terminate for C-string compatibility
-        if len < buffer_len {
-            out_slice[len] = 0;
+        // Null-terminate the string for C++
+        if max_len < buffer_len {
+            *out_address_buffer.add(max_len) = 0;
         }
     }
 
