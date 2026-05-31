@@ -1,0 +1,16 @@
+[package]
+name = "robowallet_core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+esp-hal = { version = "0.17.0", features = ["esp32c3"] }
+esp-backtrace = { version = "0.11.0", features = ["esp32c3", "exception-handler", "panic-handler", "println"] }
+esp-println = { version = "0.9.0", features = ["esp32c3"] }
+hal-core = "0.1.0"
+ed25519-dalek = { version = "2.1.0", default-features = false, features = ["rand_core"] }
+bs58 = { version = "0.5.0", default-features = false }
+
+[profile.release]
+opt-level = "s"
+lto = true
