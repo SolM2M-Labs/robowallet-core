@@ -3,6 +3,7 @@
 
 mod crypto;
 mod transaction;
+mod ffi;
 
 use esp_backtrace as _;
 use esp_println::println;
