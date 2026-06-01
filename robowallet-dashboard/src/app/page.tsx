@@ -16,6 +16,8 @@ export default function LandingPage() {
         </div>
         <div className="nav-links">
           <a href="#hardware">Hardware</a>
+          <Link href="/docs">Docs</Link>
+          <a href="https://x.com/RoboWallet_sdk" target="_blank" rel="noreferrer">Twitter</a>
           <a href="https://github.com/SolM2M-Labs/robowallet-core" target="_blank" rel="noreferrer">GitHub</a>
           <Link href="/dashboard" className="nav-btn">Launch App</Link>
         </div>
@@ -33,7 +35,7 @@ export default function LandingPage() {
           
           <div className="hero-cta-group">
             <Link href="/dashboard" className="btn-primary">Initialize SDK</Link>
-            <a href="https://github.com/SolM2M-Labs/robowallet-core" target="_blank" rel="noreferrer" className="btn-secondary">View Documentation</a>
+            <Link href="/docs" className="btn-secondary">View Documentation</Link>
           </div>
           
           <div className="tech-stack">
@@ -91,6 +93,16 @@ export default function LandingPage() {
         </div>
       </section>
 
+      <footer style={{ borderTop: '1px solid var(--border-dim)', padding: '40px 60px', marginTop: '100px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(9, 10, 15, 0.95)', zIndex: 10, position: 'relative' }}>
+        <div style={{ color: 'var(--text-muted)', fontSize: '14px' }}>
+          © 2026 RoboWallet Core. All rights reserved.
+        </div>
+        <div style={{ display: 'flex', gap: '24px' }}>
+          <a href="https://x.com/RoboWallet_sdk" target="_blank" rel="noreferrer" style={{ color: 'var(--text-muted)', textDecoration: 'none', transition: 'color 0.2s' }}>Twitter</a>
+          <a href="https://github.com/SolM2M-Labs/robowallet-core" target="_blank" rel="noreferrer" style={{ color: 'var(--text-muted)', textDecoration: 'none', transition: 'color 0.2s' }}>GitHub</a>
+          <Link href="/docs" style={{ color: 'var(--text-muted)', textDecoration: 'none', transition: 'color 0.2s' }}>Documentation</Link>
+        </div>
+      </footer>
     </div>
   );
 }

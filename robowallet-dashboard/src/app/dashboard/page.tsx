@@ -152,8 +152,11 @@ export default function Dashboard() {
           <a href="#" className="nav-link">
             <span>🔑</span> Session Keys
           </a>
-          <a href="#" className="nav-link">
+          <Link href="/docs" className="nav-link">
             <span>📖</span> API Docs
+          </Link>
+          <a href="https://x.com/RoboWallet_sdk" target="_blank" rel="noopener noreferrer" className="nav-link">
+            <span>🐦</span> Twitter
           </a>
           <Link href="/" className="nav-link" style={{ marginTop: 'auto', borderTop: '1px dashed var(--border-dim)', paddingTop: '16px', color: 'var(--accent-yellow)', fontWeight: 'bold' }}>
             <span>🏠</span> Back to Home
