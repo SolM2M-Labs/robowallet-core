@@ -13,10 +13,17 @@ const WalletMultiButton = dynamic(
   { ssr: false }
 );
 
+interface AlertInfo {
+  type: 'success' | 'error';
+  message: string;
+  signature?: string;
+}
+
 export default function Dashboard() {
   const { publicKey, sendTransaction } = useWallet();
   const [currentSlot, setCurrentSlot] = useState<number | null>(null);
   const [networkStatus, setNetworkStatus] = useState<string>("Connecting...");
+  const [notification, setNotification] = useState<AlertInfo | null>(null);
 
   const [deviceInput, setDeviceInput] = useState<string>("5sxEFwxCv8E4c8Pa1nMxLYLp7czhXbHeWoo59ScJ5tJ8"); // default mock device
   const [pdaAddress, setPdaAddress] = useState<string>("");
@@ -94,10 +101,14 @@ export default function Dashboard() {
 
   const handleInitializeSession = async () => {
     if (!publicKey || !deviceInput || !pdaAddress || pdaAddress === "Invalid Device Address") {
-      alert("Please connect wallet and provide a valid device address.");
+      setNotification({
+        type: 'error',
+        message: "Please connect wallet and provide a valid device address."
+      });
       return;
     }
     setIsInitializing(true);
+    setNotification(null); // clear previous
     try {
       const connection = new Connection(clusterApiUrl('devnet'), 'confirmed');
       const devicePubkey = new PublicKey(deviceInput.trim());
@@ -130,10 +141,17 @@ export default function Dashboard() {
 
       const tx = new Transaction().add(instruction);
       const signature = await sendTransaction(tx, connection);
-      alert(`Session PDA Vault successfully initialized!\nSignature: ${signature}`);
+      setNotification({
+        type: 'success',
+        message: "Session PDA Vault successfully initialized!",
+        signature
+      });
     } catch (e: any) {
       console.error(e);
-      alert(`Transaction failed: ${e.message}`);
+      setNotification({
+        type: 'error',
+        message: `Transaction failed: ${e.message}`
+      });
     } finally {
       setIsInitializing(false);
     }
@@ -141,10 +159,14 @@ export default function Dashboard() {
 
   const handleRevokeSession = async () => {
     if (!publicKey || !deviceInput || !pdaAddress || pdaAddress === "Invalid Device Address") {
-      alert("Please connect wallet and provide a valid device address.");
+      setNotification({
+        type: 'error',
+        message: "Please connect wallet and provide a valid device address."
+      });
       return;
     }
     setIsRevoking(true);
+    setNotification(null); // clear previous
     try {
       const connection = new Connection(clusterApiUrl('devnet'), 'confirmed');
       
@@ -165,10 +187,17 @@ export default function Dashboard() {
 
       const tx = new Transaction().add(instruction);
       const signature = await sendTransaction(tx, connection);
-      alert(`Session PDA Vault successfully revoked!\nSignature: ${signature}`);
+      setNotification({
+        type: 'success',
+        message: "Session PDA Vault successfully revoked!",
+        signature
+      });
     } catch (e: any) {
       console.error(e);
-      alert(`Revocation failed: ${e.message}`);
+      setNotification({
+        type: 'error',
+        message: `Revocation failed: ${e.message}`
+      });
     } finally {
       setIsRevoking(false);
     }
@@ -225,6 +254,56 @@ export default function Dashboard() {
             <WalletMultiButton style={{ background: 'transparent', border: '1px solid var(--accent-purple)', color: 'var(--text-main)', fontFamily: 'var(--font-mono)' }} />
           </div>
         </header>
+
+        {notification && (
+          <div style={{
+            background: notification.type === 'success' ? 'rgba(39, 201, 63, 0.1)' : 'rgba(255, 77, 77, 0.1)',
+            border: notification.type === 'success' ? '1px solid var(--success-green)' : '1px solid #ff4d4d',
+            color: notification.type === 'success' ? 'var(--success-green)' : '#ff4d4d',
+            padding: '16px',
+            borderRadius: '8px',
+            marginBottom: '20px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            boxShadow: notification.type === 'success' ? '0 0 15px rgba(39, 201, 63, 0.15)' : '0 0 15px rgba(255, 77, 77, 0.15)',
+            fontFamily: 'var(--font-sans)'
+          }}>
+            <div>
+              <span style={{ fontWeight: 'bold', marginRight: '8px' }}>
+                {notification.type === 'success' ? '🚀 Success:' : '❌ Error:'}
+              </span>
+              {notification.message}
+              {notification.signature && (
+                <span style={{ marginLeft: '8px' }}>
+                  | Signature:{' '}
+                  <a
+                    href={`https://explorer.solana.com/tx/${notification.signature}?cluster=devnet`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ color: 'var(--accent-yellow)', textDecoration: 'none', fontWeight: 'bold', fontFamily: 'var(--font-mono)' }}
+                  >
+                    {notification.signature.slice(0, 8)}...{notification.signature.slice(-8)}
+                  </a>
+                </span>
+              )}
+            </div>
+            <button
+              onClick={() => setNotification(null)}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: 'inherit',
+                cursor: 'pointer',
+                fontSize: '1.2rem',
+                lineHeight: 1,
+                padding: '0 4px'
+              }}
+            >
+              ×
+            </button>
+          </div>
+        )}
 
         {/* Top Metrics Grid */}
         <div className="grid-container">
