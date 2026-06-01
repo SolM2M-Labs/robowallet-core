@@ -77,6 +77,12 @@ pub mod robowallet_program {
         msg!("M2M Payment Executed: {} lamports", amount);
         Ok(())
     }
+
+    /// Close an existing Session Key Vault (PDA) and recover the rent lamports
+    pub fn close_session(ctx: Context<CloseSession>) -> Result<()> {
+        msg!("Session PDA Vault closed. Rent returned to owner: {}", ctx.accounts.owner.key());
+        Ok(())
+    }
 }
 
 // ================== ACCOUNTS & CONTEXTS ==================
@@ -115,6 +121,22 @@ pub struct ExecutePayment<'info> {
     #[account(mut)]
     /// CHECK: Target can be any pubkey, it's just receiving funds
     pub target: AccountInfo<'info>,
+
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct CloseSession<'info> {
+    #[account(
+        mut,
+        seeds = [b"session", session_state.owner.as_ref(), session_state.device_key.as_ref()],
+        bump = session_state.bump,
+        close = owner
+    )]
+    pub session_state: Account<'info, SessionState>,
+
+    #[account(mut, address = session_state.owner)]
+    pub owner: Signer<'info>,
 
     pub system_program: Program<'info, System>,
 }

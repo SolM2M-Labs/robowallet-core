@@ -23,6 +23,7 @@ export default function Dashboard() {
   const [pdaBalance, setPdaBalance] = useState<number | null>(null);
   const [spendingLimitInput, setSpendingLimitInput] = useState<string>("0.05"); // default limit in SOL
   const [isInitializing, setIsInitializing] = useState<boolean>(false);
+  const [isRevoking, setIsRevoking] = useState<boolean>(false);
   const [recentTransactions, setRecentTransactions] = useState<any[]>([]);
 
   // Compute PDA when publicKey or deviceInput changes
@@ -134,6 +135,41 @@ export default function Dashboard() {
     }
   };
 
+  const handleRevokeSession = async () => {
+    if (!publicKey || !deviceInput || !pdaAddress || pdaAddress === "Invalid Device Address") {
+      alert("Please connect wallet and provide a valid device address.");
+      return;
+    }
+    setIsRevoking(true);
+    try {
+      const connection = new Connection(clusterApiUrl('devnet'), 'confirmed');
+      
+      // Discriminator: 8 bytes (44 72 b2 8c de 26 f8 d3)
+      const data = Buffer.from([0x44, 0x72, 0xb2, 0x8c, 0xde, 0x26, 0xf8, 0xd3]);
+
+      const keys = [
+        { pubkey: new PublicKey(pdaAddress), isSigner: false, isWritable: true },
+        { pubkey: publicKey, isSigner: true, isWritable: true },
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }
+      ];
+
+      const instruction = new TransactionInstruction({
+        keys,
+        programId: new PublicKey(ROBOWALLET_PROGRAM_ID),
+        data
+      });
+
+      const tx = new Transaction().add(instruction);
+      const signature = await sendTransaction(tx, connection);
+      alert(`Session PDA Vault successfully revoked!\nSignature: ${signature}`);
+    } catch (e: any) {
+      console.error(e);
+      alert(`Revocation failed: ${e.message}`);
+    } finally {
+      setIsRevoking(false);
+    }
+  };
+
   return (
     <div className="dashboard-layout">
       {/* Sidebar */}
@@ -215,8 +251,28 @@ export default function Dashboard() {
             <div className="panel-value highlight" style={{ fontSize: '1.1rem', wordBreak: 'break-all', fontFamily: 'var(--font-mono)', minHeight: '44px', display: 'flex', alignItems: 'center' }}>
               {pdaAddress ? `${pdaAddress.slice(0, 12)}...${pdaAddress.slice(-12)}` : "Connect Wallet"}
             </div>
-            <div style={{ color: 'var(--text-main)', fontSize: '1rem', marginTop: '8px', fontWeight: 'bold' }}>
-              Balance: {pdaBalance !== null ? `${pdaBalance.toFixed(4)} SOL` : "N/A"}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '12px' }}>
+              <div style={{ color: 'var(--text-main)', fontSize: '1rem', fontWeight: 'bold' }}>
+                Balance: {pdaBalance !== null ? `${pdaBalance.toFixed(4)} SOL` : "N/A"}
+              </div>
+              {pdaBalance !== null && pdaBalance > 0 && publicKey && (
+                <button
+                  onClick={handleRevokeSession}
+                  disabled={isRevoking}
+                  style={{
+                    background: 'rgba(255, 77, 77, 0.1)',
+                    border: '1px solid #ff4d4d',
+                    color: '#ff4d4d',
+                    padding: '4px 8px',
+                    borderRadius: '4px',
+                    fontSize: '0.75rem',
+                    cursor: 'pointer',
+                    fontWeight: 'bold'
+                  }}
+                >
+                  {isRevoking ? "Revoking..." : "Revoke"}
+                </button>
+              )}
             </div>
           </div>
 
