@@ -109,7 +109,11 @@ export default function Dashboard() {
       // - Spending Limit: u64 (8 bytes, little-endian)
       const discriminator = Buffer.from([0x45, 0x82, 0x5c, 0xec, 0x6b, 0xe7, 0x9f, 0x81]);
       const limitBuf = Buffer.alloc(8);
-      limitBuf.writeBigUInt64LE(BigInt(limitLamports));
+      let val = BigInt(limitLamports);
+      for (let i = 0; i < 8; i++) {
+        limitBuf[i] = Number(val & BigInt(0xff));
+        val >>= BigInt(8);
+      }
       const data = Buffer.concat([discriminator, devicePubkey.toBuffer(), limitBuf]);
 
       const keys = [
