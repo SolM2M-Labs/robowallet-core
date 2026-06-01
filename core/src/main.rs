@@ -1,24 +1,20 @@
 #![no_std]
 #![no_main]
 
-mod crypto;
-mod transaction;
-mod ffi;
-mod rpc;
 mod network;
 
-use panic_halt as _;
 use esp_hal::{delay::Delay, main};
 use esp_hal::rng::Rng;
 use esp_hal::timer::timg::TimerGroup;
 use ed25519_dalek::Signer;
-use crate::crypto::RoboKeypair;
-use crate::transaction::SolTransferTx;
+use robowallet_core::crypto::RoboKeypair;
+use robowallet_core::transaction::SolTransferTx;
+use robowallet_core::rpc;
 
 #[main]
 fn main() -> ! {
     // Initialize 72KB heap for the bare-metal Wi-Fi driver
-    esp_alloc::heap_allocator!(size: 72 * 1024);
+    robowallet_core::init_heap();
     let peripherals = esp_hal::init(esp_hal::Config::default());
     let delay = Delay::new();
 

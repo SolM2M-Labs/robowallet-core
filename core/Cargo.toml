@@ -3,6 +3,10 @@ name = "robowallet_core"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+name = "robowallet_core"
+crate-type = ["staticlib", "rlib"]
+
 [dependencies]
 esp-hal = { version = "1.0.0-rc.0", features = ["esp32c3", "unstable"] }
 panic-halt = "0.2.0"

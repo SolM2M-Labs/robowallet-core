@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { useWallet } from '@solana/wallet-adapter-react';
-import { Connection, clusterApiUrl } from '@solana/web3.js';
+import { Connection, clusterApiUrl, PublicKey, SystemProgram, Transaction, TransactionInstruction } from '@solana/web3.js';
 import { useEffect, useState } from 'react';
 import { ROBOWALLET_PROGRAM_ID } from '../config';
 
@@ -14,26 +14,125 @@ const WalletMultiButton = dynamic(
 );
 
 export default function Dashboard() {
-  const { publicKey } = useWallet();
+  const { publicKey, sendTransaction } = useWallet();
   const [currentSlot, setCurrentSlot] = useState<number | null>(null);
   const [networkStatus, setNetworkStatus] = useState<string>("Connecting...");
 
+  const [deviceInput, setDeviceInput] = useState<string>("5sxEFwxCv8E4c8Pa1nMxLYLp7czhXbHeWoo59ScJ5tJ8"); // default mock device
+  const [pdaAddress, setPdaAddress] = useState<string>("");
+  const [pdaBalance, setPdaBalance] = useState<number | null>(null);
+  const [spendingLimitInput, setSpendingLimitInput] = useState<string>("0.05"); // default limit in SOL
+  const [isInitializing, setIsInitializing] = useState<boolean>(false);
+  const [recentTransactions, setRecentTransactions] = useState<any[]>([]);
+
+  // Compute PDA when publicKey or deviceInput changes
+  useEffect(() => {
+    if (!publicKey || !deviceInput) {
+      setPdaAddress("");
+      setPdaBalance(null);
+      return;
+    }
+    try {
+      const ownerPubkey = publicKey;
+      const devicePubkey = new PublicKey(deviceInput.trim());
+      const [pda] = PublicKey.findProgramAddressSync(
+        [
+          Buffer.from("session"),
+          ownerPubkey.toBuffer(),
+          devicePubkey.toBuffer()
+        ],
+        new PublicKey(ROBOWALLET_PROGRAM_ID)
+      );
+      setPdaAddress(pda.toBase58());
+    } catch (e) {
+      setPdaAddress("Invalid Device Address");
+      setPdaBalance(null);
+    }
+  }, [publicKey, deviceInput]);
+
+  // Fetch block info, PDA balance, and recent program tx signatures
   useEffect(() => {
     const fetchSolanaData = async () => {
       try {
-        const connection = new Connection(clusterApiUrl('devnet'));
+        const connection = new Connection(clusterApiUrl('devnet'), 'confirmed');
         const slot = await connection.getSlot();
         setCurrentSlot(slot);
         setNetworkStatus("Connected (Devnet)");
+
+        // Fetch PDA Balance
+        if (pdaAddress && pdaAddress !== "Invalid Device Address") {
+          try {
+            const bal = await connection.getBalance(new PublicKey(pdaAddress));
+            setPdaBalance(bal / 1e9); // convert to SOL
+          } catch (e) {
+            setPdaBalance(0);
+          }
+        }
+
+        // Fetch Program Tx Signatures
+        try {
+          const sigs = await connection.getSignaturesForAddress(
+            new PublicKey(ROBOWALLET_PROGRAM_ID),
+            { limit: 8 }
+          );
+          setRecentTransactions(sigs);
+        } catch (txErr) {
+          console.error("Error fetching transactions:", txErr);
+        }
+
       } catch (e) {
         console.error(e);
         setNetworkStatus("Offline");
       }
     };
+
     fetchSolanaData();
     const interval = setInterval(fetchSolanaData, 5000);
     return () => clearInterval(interval);
-  }, []);
+  }, [pdaAddress]);
+
+  const handleInitializeSession = async () => {
+    if (!publicKey || !deviceInput || !pdaAddress || pdaAddress === "Invalid Device Address") {
+      alert("Please connect wallet and provide a valid device address.");
+      return;
+    }
+    setIsInitializing(true);
+    try {
+      const connection = new Connection(clusterApiUrl('devnet'), 'confirmed');
+      const devicePubkey = new PublicKey(deviceInput.trim());
+      const limitLamports = parseFloat(spendingLimitInput) * 1e9;
+
+      // Layout instruction data:
+      // - Discriminator: 8 bytes (45 82 5c ec 6b e7 9f 81)
+      // - Device Pubkey: 32 bytes
+      // - Spending Limit: u64 (8 bytes, little-endian)
+      const discriminator = Buffer.from([0x45, 0x82, 0x5c, 0xec, 0x6b, 0xe7, 0x9f, 0x81]);
+      const limitBuf = Buffer.alloc(8);
+      limitBuf.writeBigUInt64LE(BigInt(limitLamports));
+      const data = Buffer.concat([discriminator, devicePubkey.toBuffer(), limitBuf]);
+
+      const keys = [
+        { pubkey: new PublicKey(pdaAddress), isSigner: false, isWritable: true },
+        { pubkey: publicKey, isSigner: true, isWritable: true },
+        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }
+      ];
+
+      const instruction = new TransactionInstruction({
+        keys,
+        programId: new PublicKey(ROBOWALLET_PROGRAM_ID),
+        data
+      });
+
+      const tx = new Transaction().add(instruction);
+      const signature = await sendTransaction(tx, connection);
+      alert(`Session PDA Vault successfully initialized!\nSignature: ${signature}`);
+    } catch (e: any) {
+      console.error(e);
+      alert(`Transaction failed: ${e.message}`);
+    } finally {
+      setIsInitializing(false);
+    }
+  };
 
   return (
     <div className="dashboard-layout">
@@ -102,83 +201,114 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Transactions Panel */}
-          <div className="glass-panel">
+          {/* Session Key Vault Panel */}
+          <div className="glass-panel" style={{ borderLeft: pdaBalance !== null ? '4px solid var(--accent-purple)' : '4px solid var(--border-dim)' }}>
             <div className="panel-header">
-              <span>Total Transactions (24h)</span>
-              <span>⚡</span>
+              <span>Session PDA Vault</span>
+              <span className="badge" style={{ background: 'rgba(153, 69, 255, 0.1)', color: 'var(--accent-purple)' }}>
+                Active
+              </span>
             </div>
-            <div className="panel-value">45.2k</div>
-            <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: '8px' }}>
-              ~0.005 SOL avg fee
+            <div className="panel-value highlight" style={{ fontSize: '1.1rem', wordBreak: 'break-all', fontFamily: 'var(--font-mono)', minHeight: '44px', display: 'flex', alignItems: 'center' }}>
+              {pdaAddress ? `${pdaAddress.slice(0, 12)}...${pdaAddress.slice(-12)}` : "Connect Wallet"}
+            </div>
+            <div style={{ color: 'var(--text-main)', fontSize: '1rem', marginTop: '8px', fontWeight: 'bold' }}>
+              Balance: {pdaBalance !== null ? `${pdaBalance.toFixed(4)} SOL` : "N/A"}
             </div>
           </div>
 
-          {/* Early Access Waitlist Panel */}
-          <div className="glass-panel" style={{ border: '1px solid var(--accent-purple)' }}>
+          {/* Session Initializer Panel */}
+          <div className="glass-panel" style={{ border: '1px solid var(--accent-purple)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <div className="panel-header" style={{ color: 'var(--text-main)' }}>
-              <span>🚀 Join the Alpha Waitlist</span>
+              <span>🔑 Initialize Session Vault</span>
             </div>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '12px', fontFamily: 'var(--font-sans)' }}>
-              Get early access to the RoboWallet C/Rust SDK and Session Key smart contracts.
-            </p>
-            <div style={{ display: 'flex', gap: '8px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
               <input 
-                type="email" 
-                placeholder="developer@example.com" 
+                type="text" 
+                placeholder="Device Public Key (Base58)" 
+                value={deviceInput}
+                onChange={(e) => setDeviceInput(e.target.value)}
                 style={{ 
-                  flex: 1, 
                   background: 'rgba(0,0,0,0.3)', 
                   border: '1px solid var(--border-dim)', 
-                  padding: '8px 12px', 
+                  padding: '6px 10px', 
                   borderRadius: '6px',
                   color: 'white',
+                  fontSize: '0.8rem',
                   fontFamily: 'var(--font-mono)'
                 }} 
               />
-              <button className="connect-btn" style={{ padding: '8px 16px', background: 'rgba(153, 69, 255, 0.1)', borderColor: 'var(--accent-purple)', color: 'var(--accent-purple)' }}>
-                JOIN
-              </button>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <input 
+                  type="number" 
+                  step="0.01"
+                  placeholder="Limit (SOL)" 
+                  value={spendingLimitInput}
+                  onChange={(e) => setSpendingLimitInput(e.target.value)}
+                  style={{ 
+                    flex: 1,
+                    background: 'rgba(0,0,0,0.3)', 
+                    border: '1px solid var(--border-dim)', 
+                    padding: '6px 10px', 
+                    borderRadius: '6px',
+                    color: 'white',
+                    fontSize: '0.8rem',
+                    fontFamily: 'var(--font-mono)'
+                  }} 
+                />
+                <button 
+                  onClick={handleInitializeSession}
+                  disabled={isInitializing || !publicKey}
+                  className="connect-btn" 
+                  style={{ 
+                    padding: '6px 12px', 
+                    background: publicKey ? 'rgba(153, 69, 255, 0.2)' : 'rgba(255, 255, 255, 0.05)', 
+                    borderColor: publicKey ? 'var(--accent-purple)' : 'var(--border-dim)', 
+                    color: publicKey ? 'var(--accent-purple)' : 'var(--text-muted)',
+                    cursor: publicKey ? 'pointer' : 'not-allowed',
+                    fontSize: '0.8rem',
+                    fontWeight: 'bold'
+                  }}
+                >
+                  {isInitializing ? "WAIT..." : "INITIALIZE"}
+                </button>
+              </div>
             </div>
           </div>
         </div>
 
         {/* Live Transaction Feed */}
-        <div className="glass-panel" style={{ flex: 1 }}>
+        <div className="glass-panel" style={{ flex: 1, marginTop: '20px' }}>
           <div className="panel-header">
-            <span>Live Node Activity (OTQ Sync)</span>
-            <span className="badge" style={{ background: 'rgba(250, 204, 21, 0.1)', color: 'var(--accent-yellow)', borderColor: 'rgba(250, 204, 21, 0.2)'}}>Polling...</span>
+            <span>Live Node Activity (On-Chain Devnet)</span>
+            <span className="badge" style={{ background: 'rgba(39, 201, 63, 0.1)', color: 'var(--success-green)', borderColor: 'rgba(39, 201, 63, 0.2)'}}>Live Syncing</span>
           </div>
           
-          <ul className="feed-list">
-            <li className="feed-item">
-              <div>
-                <span style={{ marginRight: '12px' }}>🔋</span>
-                Node <span className="tx-hash">0xESP...4F2A</span> synced state.
-              </div>
-              <span className="tx-amount" style={{ color: 'var(--text-muted)' }}>2 sec ago</span>
-            </li>
-            <li className="feed-item">
-              <div>
-                <span style={{ marginRight: '12px' }}>💸</span>
-                Node <span className="tx-hash">0xRPI...9B1C</span> processed payment.
-              </div>
-              <span className="tx-amount">+0.05 SOL</span>
-            </li>
-            <li className="feed-item">
-              <div>
-                <span style={{ marginRight: '12px' }}>📡</span>
-                Node <span className="tx-hash">0xDRN...77X1</span> requested Blockhash.
-              </div>
-              <span className="tx-amount" style={{ color: 'var(--text-muted)' }}>14 sec ago</span>
-            </li>
-            <li className="feed-item">
-              <div>
-                <span style={{ marginRight: '12px' }}>💸</span>
-                Node <span className="tx-hash">0xESP...2A22</span> processed payment.
-              </div>
-              <span className="tx-amount">+0.01 SOL</span>
-            </li>
+          <ul className="feed-list" style={{ maxHeight: '250px', overflowY: 'auto' }}>
+            {recentTransactions.length > 0 ? (
+              recentTransactions.map((tx, idx) => (
+                <li className="feed-item" key={idx} style={{ padding: '10px 0', borderBottom: '1px solid var(--border-dim)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <span style={{ marginRight: '12px' }}>⚡</span>
+                    Signature: <a href={`https://explorer.solana.com/tx/${tx.signature}?cluster=devnet`} target="_blank" rel="noopener noreferrer" className="tx-hash" style={{ color: 'var(--accent-yellow)', textDecoration: 'none' }}>
+                      {tx.signature.slice(0, 12)}...{tx.signature.slice(-12)}
+                    </a>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span className="badge" style={{ background: tx.err ? 'rgba(255,77,77,0.1)' : 'rgba(39,201,63,0.1)', color: tx.err ? '#ff4d4d' : 'var(--success-green)' }}>
+                      {tx.err ? "Failed" : "Success"}
+                    </span>
+                    <span className="tx-amount" style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                      Slot: {tx.slot}
+                    </span>
+                  </div>
+                </li>
+              ))
+            ) : (
+              <li className="feed-item" style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '20px 0' }}>
+                No transactions found for Program ID.
+              </li>
+            )}
           </ul>
         </div>
       </main>
