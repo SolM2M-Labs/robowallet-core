@@ -1,153 +1,96 @@
-"use client";
+import Link from 'next/link';
+import './landing.css';
 
-import React from 'react';
-import dynamic from 'next/dynamic';
-import { useWallet } from '@solana/wallet-adapter-react';
-
-// Next.js dynamic import for the Wallet button to avoid SSR hydration issues
-const WalletMultiButton = dynamic(
-  async () => (await import('@solana/wallet-adapter-react-ui')).WalletMultiButton,
-  { ssr: false }
-);
-
-export default function Dashboard() {
-  const { publicKey } = useWallet();
-
+export default function LandingPage() {
   return (
-    <div className="dashboard-layout">
-      {/* Sidebar */}
-      <aside className="sidebar">
-        <div className="brand" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <img src="/logo.png" alt="RoboWallet Logo" style={{ width: '40px', height: '40px', borderRadius: '8px', border: '1px solid var(--accent-purple)' }} />
-          <span>RoboWallet</span>
+    <div className="landing-wrapper">
+      <div className="grid-overlay"></div>
+      <div className="glow-orb solana-purple"></div>
+      <div className="glow-orb caution-yellow"></div>
+      <div className="hero-banner-bg"></div>
+
+      <nav className="navbar">
+        <div className="nav-logo">
+          <img src="/logo.png" alt="Logo" className="logo-img" />
+          <span className="logo-text">RoboWallet<span className="accent">.</span></span>
         </div>
-        <nav>
-          <a href="#" className="nav-link active">
-            <span>📊</span> Fleet Dashboard
-          </a>
-          <a href="#" className="nav-link">
-            <span>⚙️</span> Node Settings
-          </a>
-          <a href="#" className="nav-link">
-            <span>🔑</span> Session Keys
-          </a>
-          <a href="#" className="nav-link">
-            <span>📖</span> API Docs
-          </a>
-        </nav>
-      </aside>
-
-      {/* Main Content */}
-      <main className="main-content">
-        <header className="top-bar">
-          <div>
-            <h1 className="page-title">Fleet Overview</h1>
-            {publicKey && (
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '4px', fontFamily: 'var(--font-mono)' }}>
-                Identity: {publicKey.toBase58().slice(0, 8)}...{publicKey.toBase58().slice(-8)}
-              </p>
-            )}
-          </div>
-          {/* Replaced standard button with Solana Wallet Adapter Button */}
-          <div style={{ filter: 'drop-shadow(0 0 10px rgba(153,69,255,0.2))' }}>
-            <WalletMultiButton style={{ background: 'transparent', border: '1px solid var(--accent-purple)', color: 'var(--text-main)', fontFamily: 'var(--font-mono)' }} />
-          </div>
-        </header>
-
-        {/* Top Metrics Grid */}
-        <div className="grid-container">
-          {/* Active Nodes Panel */}
-          <div className="glass-panel">
-            <div className="panel-header">
-              <span>Active Nodes</span>
-              <span className="badge">Online</span>
-            </div>
-            <div className="panel-value highlight">1,248</div>
-            <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: '8px' }}>
-              +12 this week
-            </div>
-          </div>
-
-          {/* Transactions Panel */}
-          <div className="glass-panel">
-            <div className="panel-header">
-              <span>Total Transactions (24h)</span>
-              <span>⚡</span>
-            </div>
-            <div className="panel-value">45.2k</div>
-            <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: '8px' }}>
-              ~0.005 SOL avg fee
-            </div>
-          </div>
-
-          {/* Early Access Waitlist Panel */}
-          <div className="glass-panel" style={{ border: '1px solid var(--accent-purple)' }}>
-            <div className="panel-header" style={{ color: 'var(--text-main)' }}>
-              <span>🚀 Join the Alpha Waitlist</span>
-            </div>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '12px', fontFamily: 'var(--font-sans)' }}>
-              Get early access to the RoboWallet C/Rust SDK and Session Key smart contracts.
-            </p>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <input 
-                type="email" 
-                placeholder="developer@example.com" 
-                style={{ 
-                  flex: 1, 
-                  background: 'rgba(0,0,0,0.3)', 
-                  border: '1px solid var(--border-dim)', 
-                  padding: '8px 12px', 
-                  borderRadius: '6px',
-                  color: 'white',
-                  fontFamily: 'var(--font-mono)'
-                }} 
-              />
-              <button className="connect-btn" style={{ padding: '8px 16px', background: 'rgba(153, 69, 255, 0.1)', borderColor: 'var(--accent-purple)', color: 'var(--accent-purple)' }}>
-                JOIN
-              </button>
-            </div>
-          </div>
+        <div className="nav-links">
+          <a href="#hardware">Hardware</a>
+          <a href="https://github.com/SolM2M-Labs/robowallet-core" target="_blank" rel="noreferrer">GitHub</a>
+          <Link href="/dashboard" className="nav-btn">Launch App</Link>
         </div>
+      </nav>
 
-        {/* Live Transaction Feed */}
-        <div className="glass-panel" style={{ flex: 1 }}>
-          <div className="panel-header">
-            <span>Live Node Activity (OTQ Sync)</span>
-            <span className="badge" style={{ background: 'rgba(250, 204, 21, 0.1)', color: 'var(--accent-yellow)', borderColor: 'rgba(250, 204, 21, 0.2)'}}>Polling...</span>
+      <main className="hero-section">
+        <div className="hero-content">
+          <div className="badge">🔥 STRICTLY NO_STD RUST</div>
+          <h1 className="hero-title" style={{ fontFamily: 'var(--font-display)', fontSize: '72px', fontWeight: 700, lineHeight: 1.05, letterSpacing: '-2px', marginBottom: '24px', background: 'linear-gradient(180deg, #FFFFFF 0%, #A1A1AA 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+            The Machine<br/>Economy is Here.
+          </h1>
+          <p className="hero-subtitle">
+            A military-grade, zero-allocation embedded SDK that turns $5 microcontrollers into autonomous economic agents on the Solana blockchain.
+          </p>
+          
+          <div className="hero-cta-group">
+            <Link href="/dashboard" className="btn-primary">Initialize SDK</Link>
+            <a href="https://github.com/SolM2M-Labs/robowallet-core" target="_blank" rel="noreferrer" className="btn-secondary">View Documentation</a>
           </div>
           
-          <ul className="feed-list">
-            <li className="feed-item">
-              <div>
-                <span style={{ marginRight: '12px' }}>🔋</span>
-                Node <span className="tx-hash">0xESP...4F2A</span> synced state.
-              </div>
-              <span className="tx-amount" style={{ color: 'var(--text-muted)' }}>2 sec ago</span>
-            </li>
-            <li className="feed-item">
-              <div>
-                <span style={{ marginRight: '12px' }}>💸</span>
-                Node <span className="tx-hash">0xRPI...9B1C</span> processed payment.
-              </div>
-              <span className="tx-amount">+0.05 SOL</span>
-            </li>
-            <li className="feed-item">
-              <div>
-                <span style={{ marginRight: '12px' }}>📡</span>
-                Node <span className="tx-hash">0xDRN...77X1</span> requested Blockhash.
-              </div>
-              <span className="tx-amount" style={{ color: 'var(--text-muted)' }}>14 sec ago</span>
-            </li>
-            <li className="feed-item">
-              <div>
-                <span style={{ marginRight: '12px' }}>💸</span>
-                Node <span className="tx-hash">0xESP...2A22</span> processed payment.
-              </div>
-              <span className="tx-amount">+0.01 SOL</span>
-            </li>
-          </ul>
+          <div className="tech-stack">
+            <span>Backed By:</span>
+            <div className="tech-logos">
+              <span>Rust</span>
+              <span className="separator">•</span>
+              <span>ESP32</span>
+              <span className="separator">•</span>
+              <span>Solana</span>
+              <span className="separator">•</span>
+              <span>ATECC608</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="hero-visual">
+          <div className="terminal-window">
+            <div className="terminal-header">
+              <span className="dot red" style={{ display: 'inline-block', width: '10px', height: '10px', borderRadius: '50%', backgroundColor: '#ff5f56', marginRight: '6px' }}></span>
+              <span className="dot yellow" style={{ display: 'inline-block', width: '10px', height: '10px', borderRadius: '50%', backgroundColor: '#ffbd2e', marginRight: '6px' }}></span>
+              <span className="dot green" style={{ display: 'inline-block', width: '10px', height: '10px', borderRadius: '50%', backgroundColor: '#27c93f', marginRight: '16px' }}></span>
+              <span className="terminal-title">robowallet@esp32: ~/core</span>
+            </div>
+            <div className="terminal-body" id="terminal-text">
+              <p><span className="prompt">&gt;&gt;</span> boot sequence initiated...</p>
+              <p><span className="prompt">&gt;&gt;</span> loading esp-hal (risc-v)... <span className="success">[OK]</span></p>
+              <p><span className="prompt">&gt;&gt;</span> generating ed25519 keypair... <span className="success">[OK]</span></p>
+              <p><span className="prompt">&gt;&gt;</span> solana address: <span className="accent">4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R</span></p>
+              <p><span className="prompt">&gt;&gt;</span> building transfer 5,000,000 lamports... <span className="success">[SIGNED]</span></p>
+              <p className="blink-cursor">_</p>
+            </div>
+          </div>
         </div>
       </main>
+
+      <section className="features-section" id="hardware">
+        <h2 className="section-title" style={{ fontFamily: 'var(--font-display)', fontSize: '42px', textAlign: 'center', marginBottom: '70px', fontWeight: 700, letterSpacing: '-1px' }}>Built for Hardware.</h2>
+        <div className="features-grid">
+          <div className="feature-card">
+            <div className="icon" style={{ fontSize: '36px', marginBottom: '24px' }}>⚡</div>
+            <h3>Zero Allocations</h3>
+            <p>Pure `no_std` Rust. No heap memory, no crashes. Built specifically for resource-constrained devices like the ESP32-C3.</p>
+          </div>
+          <div className="feature-card">
+            <div className="icon" style={{ fontSize: '36px', marginBottom: '24px' }}>🔒</div>
+            <h3>Hardware Security</h3>
+            <p>Native integration with ATECC608 secure elements. Private keys never touch the main application processor.</p>
+          </div>
+          <div className="feature-card">
+            <div className="icon" style={{ fontSize: '36px', marginBottom: '24px' }}>🤖</div>
+            <h3>DePIN Ready</h3>
+            <p>Verify your IoT node, join the machine network, and start transacting autonomously on the fastest blockchain in the world.</p>
+          </div>
+        </div>
+      </section>
+
     </div>
   );
 }
