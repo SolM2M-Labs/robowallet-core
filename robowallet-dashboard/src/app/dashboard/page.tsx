@@ -3,6 +3,9 @@
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { useWallet } from '@solana/wallet-adapter-react';
+import { Connection, clusterApiUrl } from '@solana/web3.js';
+import { useEffect, useState } from 'react';
+import { ROBOWALLET_PROGRAM_ID } from '../config';
 
 // Next.js dynamic import for the Wallet button to avoid SSR hydration issues
 const WalletMultiButton = dynamic(
@@ -12,6 +15,25 @@ const WalletMultiButton = dynamic(
 
 export default function Dashboard() {
   const { publicKey } = useWallet();
+  const [currentSlot, setCurrentSlot] = useState<number | null>(null);
+  const [networkStatus, setNetworkStatus] = useState<string>("Connecting...");
+
+  useEffect(() => {
+    const fetchSolanaData = async () => {
+      try {
+        const connection = new Connection(clusterApiUrl('devnet'));
+        const slot = await connection.getSlot();
+        setCurrentSlot(slot);
+        setNetworkStatus("Connected (Devnet)");
+      } catch (e) {
+        console.error(e);
+        setNetworkStatus("Offline");
+      }
+    };
+    fetchSolanaData();
+    const interval = setInterval(fetchSolanaData, 5000);
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <div className="dashboard-layout">
@@ -34,17 +56,21 @@ export default function Dashboard() {
           <a href="#" className="nav-link">
             <span>📖</span> API Docs
           </a>
-          <Link href="/" className="nav-link" style={{ marginTop: 'auto', borderTop: '1px dashed var(--border-dim)', paddingTop: '16px', color: 'var(--accent-yellow)' }}>
-            <span>🏠</span> Back to Landing
+          <Link href="/" className="nav-link" style={{ marginTop: 'auto', borderTop: '1px dashed var(--border-dim)', paddingTop: '16px', color: 'var(--accent-yellow)', fontWeight: 'bold' }}>
+            <span>🏠</span> Back to Home
           </Link>
         </nav>
       </aside>
 
       {/* Main Content */}
       <main className="main-content">
-        <header className="top-bar">
-          <div>
-            <h1 className="page-title">Fleet Overview</h1>
+        <header className="top-bar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <Link href="/" style={{ background: 'rgba(255, 255, 255, 0.05)', padding: '8px 12px', borderRadius: '8px', color: 'var(--text-main)', textDecoration: 'none', border: '1px solid var(--border-dim)' }}>
+              ← Home
+            </Link>
+            <div>
+              <h1 className="page-title">Fleet Overview</h1>
             {publicKey && (
               <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '4px', fontFamily: 'var(--font-mono)' }}>
                 Identity: {publicKey.toBase58().slice(0, 8)}...{publicKey.toBase58().slice(-8)}
@@ -59,15 +85,19 @@ export default function Dashboard() {
 
         {/* Top Metrics Grid */}
         <div className="grid-container">
-          {/* Active Nodes Panel */}
-          <div className="glass-panel">
+          {/* Network Status Panel */}
+          <div className="glass-panel" style={{ borderLeft: networkStatus.includes('Connected') ? '4px solid var(--success-green)' : '4px solid var(--accent-yellow)' }}>
             <div className="panel-header">
-              <span>Active Nodes</span>
-              <span className="badge">Online</span>
+              <span>Network Status</span>
+              <span className="badge" style={{ background: networkStatus.includes('Connected') ? 'rgba(39, 201, 63, 0.1)' : 'rgba(255, 189, 46, 0.1)', color: networkStatus.includes('Connected') ? 'var(--success-green)' : 'var(--accent-yellow)' }}>
+                {networkStatus}
+              </span>
             </div>
-            <div className="panel-value highlight">1,248</div>
-            <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: '8px' }}>
-              +12 this week
+            <div className="panel-value highlight" style={{ fontSize: '1.5rem', wordBreak: 'break-all' }}>
+              {currentSlot ? `Slot: ${currentSlot.toLocaleString()}` : "Syncing..."}
+            </div>
+            <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: '8px', fontFamily: 'var(--font-mono)' }}>
+              Contract: {ROBOWALLET_PROGRAM_ID.slice(0, 10)}...{ROBOWALLET_PROGRAM_ID.slice(-10)}
             </div>
           </div>
 

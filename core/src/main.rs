@@ -5,26 +5,40 @@ mod crypto;
 mod transaction;
 mod ffi;
 mod rpc;
+mod network;
 
 use panic_halt as _;
-use esp_hal::{clock::ClockControl, peripherals::Peripherals, prelude::*, delay::Delay};
+use esp_hal::{delay::Delay, main};
+use esp_hal::rng::Rng;
+use esp_hal::timer::timg::TimerGroup;
+use ed25519_dalek::Signer;
 use crate::crypto::RoboKeypair;
 use crate::transaction::SolTransferTx;
 
-#[entry]
+#[main]
 fn main() -> ! {
-    let peripherals = Peripherals::take();
-    let system = peripherals.SYSTEM.split();
-    
-    let clocks = ClockControl::max(system.clock_control).freeze();
-    let mut delay = Delay::new(&clocks);
+    // Initialize 72KB heap for the bare-metal Wi-Fi driver
+    esp_alloc::heap_allocator!(size: 72 * 1024);
+    let peripherals = esp_hal::init(esp_hal::Config::default());
+    let delay = Delay::new();
+
+    // Initialize Timer and Rng required by esp-wifi
+    let timg0 = TimerGroup::new(peripherals.TIMG0);
+    let rng = Rng::new(peripherals.RNG);
+    let init = esp_wifi::init(
+        timg0.timer0,
+        rng,
+    ).unwrap();
+
+    // Create Wifi Controller and Device
+    let wifi = peripherals.WIFI;
+    let (controller, interfaces) = esp_wifi::wifi::new(&init, wifi).unwrap();
 
     // Initialize Phase 2: Cryptography & Wallet Generation
     let keypair = RoboKeypair::generate_test_keypair();
     keypair.print_wallet_info();
 
     // Initialize Phase 3: Transaction Construction & Signing
-    // Simulating an autonomous M2M payment (e.g., Drone paying Charging Pad)
     let dummy_receiver = [8u8; 32];
     let dummy_blockhash = [9u8; 32]; // Fetched via RPC in real scenario
     let transfer_amount = 5_000_000; // 0.005 SOL
@@ -36,7 +50,26 @@ fn main() -> ! {
         dummy_blockhash
     );
 
-    tx.sign_and_build(&keypair.secret);
+    // Build the serialized message buffer
+    let mut tx_msg_buffer = [0u8; 256];
+    let msg_len = tx.serialize_message(&mut tx_msg_buffer);
+
+    // Sign the transaction message using software key
+    let _signature = keypair.secret.sign(&tx_msg_buffer[..msg_len]);
+    
+    // In a production layout, we append signature and header to form the final Solana Tx.
+    // For M2M demo, we format this payload into a JSON-RPC broadcast request
+    let mut base64_buffer = [0u8; 512];
+    let mut json_buffer = [0u8; 1024];
+    
+    let request_len = rpc::build_send_transaction_request(
+        &tx_msg_buffer[..msg_len],
+        &mut base64_buffer,
+        &mut json_buffer,
+    ).unwrap();
+
+    // Broadcast the transaction over Wi-Fi
+    network::connect_and_send(controller, interfaces.sta, &json_buffer[..request_len]);
 
     loop {
         // RoboWallet OTQ (Offline Tx Queue) Polling...

@@ -4,6 +4,7 @@
 use ed25519_dalek::{SigningKey, Signer};
 
 /// A lightweight, stack-allocated representation of a Solana Transfer Transaction
+#[allow(dead_code)]
 pub struct SolTransferTx {
     pub sender: [u8; 32],
     pub receiver: [u8; 32],

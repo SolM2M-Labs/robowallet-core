@@ -1,0 +1,4 @@
+robowallet-dashboard/node_modules/
+robowallet-dashboard/.next/
+target/
+.git/

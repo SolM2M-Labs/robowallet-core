@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_lang::system_program;
 
-declare_id!("RoboWalletSessionKey11111111111111111111111");
+declare_id!("896w2abQMjM5KGABmDL8uuxhCCyF2GtwAL6rGPgeJxN4");
 
 #[program]
 pub mod robowallet_program {
