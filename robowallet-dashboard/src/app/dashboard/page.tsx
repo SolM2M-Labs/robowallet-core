@@ -1,6 +1,6 @@
 "use client";
 
-import React from 'react';
+import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { useWallet } from '@solana/wallet-adapter-react';
 
@@ -17,11 +17,11 @@ export default function Dashboard() {
     <div className="dashboard-layout">
       {/* Sidebar */}
       <aside className="sidebar">
-        <div className="brand" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <Link href="/" className="brand" style={{ display: 'flex', alignItems: 'center', gap: '12px', textDecoration: 'none', color: 'inherit', cursor: 'pointer' }}>
           <img src="/logo.png" alt="RoboWallet Logo" style={{ width: '40px', height: '40px', borderRadius: '8px', border: '1px solid var(--accent-purple)' }} />
           <span>RoboWallet</span>
-        </div>
-        <nav>
+        </Link>
+        <nav style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
           <a href="#" className="nav-link active">
             <span>📊</span> Fleet Dashboard
           </a>
@@ -34,6 +34,9 @@ export default function Dashboard() {
           <a href="#" className="nav-link">
             <span>📖</span> API Docs
           </a>
+          <Link href="/" className="nav-link" style={{ marginTop: 'auto', borderTop: '1px dashed var(--border-dim)', paddingTop: '16px', color: 'var(--accent-yellow)' }}>
+            <span>🏠</span> Back to Landing
+          </Link>
         </nav>
       </aside>
 
