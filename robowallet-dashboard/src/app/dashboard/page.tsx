@@ -71,11 +71,12 @@ export default function Dashboard() {
             </Link>
             <div>
               <h1 className="page-title">Fleet Overview</h1>
-            {publicKey && (
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '4px', fontFamily: 'var(--font-mono)' }}>
-                Identity: {publicKey.toBase58().slice(0, 8)}...{publicKey.toBase58().slice(-8)}
-              </p>
-            )}
+              {publicKey && (
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '4px', fontFamily: 'var(--font-mono)' }}>
+                  Identity: {publicKey.toBase58().slice(0, 8)}...{publicKey.toBase58().slice(-8)}
+                </p>
+              )}
+            </div>
           </div>
           {/* Replaced standard button with Solana Wallet Adapter Button */}
           <div style={{ filter: 'drop-shadow(0 0 10px rgba(153,69,255,0.2))' }}>
