@@ -170,7 +170,9 @@ pub fn build_send_transaction_request(
             b64_str,
             SendTxConfig {
                 encoding: "base64",
-                preflight_commitment: "finalized",
+                // "confirmed" so freshly-funded devices aren't rejected while
+                // their funding transaction awaits finalization
+                preflight_commitment: "confirmed",
             },
         ),
     };
