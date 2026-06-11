@@ -5,3 +5,10 @@ node_modules/
 .vercel
 rpc_req.json
 rpc_res.json
+
+# Devnet test keypair (secret key) — never commit
+scripts/test_owner.json
+
+# Playwright MCP artifacts & local screenshots
+.playwright-mcp/
+*.jpeg

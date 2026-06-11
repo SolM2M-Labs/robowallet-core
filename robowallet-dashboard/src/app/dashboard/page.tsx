@@ -3,9 +3,9 @@
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { useWallet } from '@solana/wallet-adapter-react';
-import { Connection, clusterApiUrl, PublicKey, SystemProgram, Transaction, TransactionInstruction } from '@solana/web3.js';
-import { useEffect, useState } from 'react';
-import { ROBOWALLET_PROGRAM_ID } from '../config';
+import { Connection, PublicKey, SystemProgram, Transaction, TransactionInstruction } from '@solana/web3.js';
+import { useEffect, useMemo, useState } from 'react';
+import { ROBOWALLET_PROGRAM_ID, SOLANA_RPC_URL } from '../config';
 
 // Next.js dynamic import for the Wallet button to avoid SSR hydration issues
 const WalletMultiButton = dynamic(
@@ -21,6 +21,9 @@ interface AlertInfo {
 
 export default function Dashboard() {
   const { publicKey, sendTransaction } = useWallet();
+  // One shared connection for the whole page — creating a new Connection per
+  // request multiplies sockets and trips the public RPC's per-IP rate limit.
+  const connection = useMemo(() => new Connection(SOLANA_RPC_URL, 'confirmed'), []);
   const [currentSlot, setCurrentSlot] = useState<number | null>(null);
   const [networkStatus, setNetworkStatus] = useState<string>("Connecting...");
   const [notification, setNotification] = useState<AlertInfo | null>(null);
@@ -62,7 +65,6 @@ export default function Dashboard() {
   useEffect(() => {
     const fetchSolanaData = async () => {
       try {
-        const connection = new Connection(clusterApiUrl('devnet'), 'confirmed');
         const slot = await connection.getSlot();
         setCurrentSlot(slot);
         setNetworkStatus("Connected (Devnet)");
@@ -95,9 +97,10 @@ export default function Dashboard() {
     };
 
     fetchSolanaData();
-    const interval = setInterval(fetchSolanaData, 5000);
+    // 15s keeps us well under the public RPC's per-IP budget (was 5s → constant 429s)
+    const interval = setInterval(fetchSolanaData, 15000);
     return () => clearInterval(interval);
-  }, [pdaAddress]);
+  }, [pdaAddress, connection]);
 
   const handleInitializeSession = async () => {
     if (!publicKey || !deviceInput || !pdaAddress || pdaAddress === "Invalid Device Address") {
@@ -110,7 +113,6 @@ export default function Dashboard() {
     setIsInitializing(true);
     setNotification(null); // clear previous
     try {
-      const connection = new Connection(clusterApiUrl('devnet'), 'confirmed');
       const devicePubkey = new PublicKey(deviceInput.trim());
       const limitLamports = parseFloat(spendingLimitInput) * 1e9;
 
@@ -168,8 +170,6 @@ export default function Dashboard() {
     setIsRevoking(true);
     setNotification(null); // clear previous
     try {
-      const connection = new Connection(clusterApiUrl('devnet'), 'confirmed');
-      
       // Discriminator: 8 bytes (44 72 b2 8c de 26 f8 d3)
       const data = Buffer.from([0x44, 0x72, 0xb2, 0x8c, 0xde, 0x26, 0xf8, 0xd3]);
 
