@@ -1,4 +1,4 @@
-export const ROBOWALLET_PROGRAM_ID = "896w2abQMjM5KGABmDL8uuxhCCyF2GtwAL6rGPgeJxN4";
+export const ROBOWALLET_PROGRAM_ID = "ArgvLnQ5UhqJ9Ks7JF7nycbUJNzAgwR136LqzBNCCux9";
 
 // Set NEXT_PUBLIC_SOLANA_RPC_URL in Vercel (e.g. a Helius/QuickNode devnet endpoint)
 // to avoid the public RPC's aggressive per-IP rate limits.

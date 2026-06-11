@@ -15,7 +15,7 @@ const {
 const fs = require('fs');
 const path = require('path');
 
-const PROGRAM_ID = new PublicKey("896w2abQMjM5KGABmDL8uuxhCCyF2GtwAL6rGPgeJxN4");
+const PROGRAM_ID = new PublicKey("ArgvLnQ5UhqJ9Ks7JF7nycbUJNzAgwR136LqzBNCCux9");
 const OWNER_KEY_FILE = path.join(__dirname, 'test_owner.json');
 
 const DISC_INITIALIZE = Buffer.from([0x45, 0x82, 0x5c, 0xec, 0x6b, 0xe7, 0x9f, 0x81]);
@@ -39,7 +39,8 @@ function u64le(n) {
 }
 
 async function main() {
-    const connection = new Connection("https://api.devnet.solana.com", "confirmed");
+    const rpcUrl = process.env.SOLANA_RPC_URL || "https://api.devnet.solana.com";
+    const connection = new Connection(rpcUrl, "confirmed");
     const owner = loadOrCreateOwner();
     const device = Keypair.generate();
     const target = Keypair.generate().publicKey;
@@ -119,6 +120,32 @@ async function main() {
         console.error("  EXECUTE_PAYMENT FAILED!");
         console.error("  ", e.message);
         if (e.logs) console.error(e.logs.join("\n  "));
+    }
+
+    // --- Step 2b: over-limit payment MUST be rejected (limit 0.02, already spent 0.01) ---
+    const overIx = new TransactionInstruction({
+        programId: PROGRAM_ID,
+        keys: [
+            { pubkey: sessionPDA, isSigner: false, isWritable: true },
+            { pubkey: device.publicKey, isSigner: true, isWritable: false },
+            { pubkey: target, isSigner: false, isWritable: true },
+            { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+        ],
+        data: Buffer.concat([DISC_EXECUTE, u64le(0.015 * LAMPORTS_PER_SOL)])
+    });
+    const tx2b = new Transaction().add(overIx);
+    tx2b.feePayer = device.publicKey;
+
+    console.log("\n[2b/3] over-limit payment 0.015 SOL (should FAIL with SpendingLimitExceeded)...");
+    try {
+        await sendAndConfirmTransaction(connection, tx2b, [device]);
+        console.error("  SECURITY BUG: over-limit payment was ACCEPTED!");
+        process.exit(1);
+    } catch (e) {
+        const limited = /SpendingLimitExceeded|custom program error/.test(e.message);
+        console.log(limited
+            ? "  OK: rejected as expected (spending limit enforced)"
+            : `  Rejected, but with unexpected error: ${e.message}`);
     }
 
     // --- Step 3: close_session, owner recovers rent + leftover vault funds ---

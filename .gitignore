@@ -1,5 +1,7 @@
 /target
 core/target/
+# Program build output — includes the program-id keypair; never commit
+robowallet_program/target/
 node_modules/
 **/node_modules/
 .vercel

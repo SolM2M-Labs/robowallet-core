@@ -4,7 +4,7 @@
 
 const { Connection, PublicKey } = require('@solana/web3.js');
 
-const PROGRAM_ID = new PublicKey("896w2abQMjM5KGABmDL8uuxhCCyF2GtwAL6rGPgeJxN4");
+const PROGRAM_ID = new PublicKey("ArgvLnQ5UhqJ9Ks7JF7nycbUJNzAgwR136LqzBNCCux9");
 
 const DISCRIMINATORS = {
     "45825cec6be79f81": "initialize_session",

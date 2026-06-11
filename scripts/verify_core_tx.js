@@ -16,7 +16,7 @@ const bs58mod = require('bs58');
 const bs58 = bs58mod.default || bs58mod;
 
 const TXGEN = path.join(__dirname, '..', 'core', 'target', 'x86_64-pc-windows-msvc', 'debug', 'txgen.exe');
-const PROGRAM_ID = new PublicKey("896w2abQMjM5KGABmDL8uuxhCCyF2GtwAL6rGPgeJxN4");
+const PROGRAM_ID = new PublicKey("ArgvLnQ5UhqJ9Ks7JF7nycbUJNzAgwR136LqzBNCCux9");
 
 const SEED = Buffer.from(Array.from({ length: 32 }, (_, i) => i + 1)); // [1..32]
 const SEED_HEX = SEED.toString('hex');

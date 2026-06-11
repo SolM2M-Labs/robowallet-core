@@ -1,7 +1,6 @@
 use anchor_lang::prelude::*;
-use anchor_lang::system_program;
 
-declare_id!("896w2abQMjM5KGABmDL8uuxhCCyF2GtwAL6rGPgeJxN4");
+declare_id!("ArgvLnQ5UhqJ9Ks7JF7nycbUJNzAgwR136LqzBNCCux9");
 
 #[program]
 pub mod robowallet_program {
@@ -41,38 +40,33 @@ pub mod robowallet_program {
             ErrorCode::UnauthorizedDevice
         );
 
-        // 2. Enforce the spending limit
+        // 2. Enforce the spending limit (overflow-safe)
+        let new_total = session_state
+            .total_spent
+            .checked_add(amount)
+            .ok_or(ErrorCode::AmountOverflow)?;
         require!(
-            session_state.total_spent + amount <= session_state.spending_limit,
+            new_total <= session_state.spending_limit,
             ErrorCode::SpendingLimitExceeded
         );
 
-        // 3. Update state
-        session_state.total_spent += amount;
-
-        // 4. Transfer funds from PDA Vault to Target
-        let bump = session_state.bump;
-        let owner_key = session_state.owner;
-        let device_key = session_state.device_key;
-        
-        let seeds = &[
-            b"session",
-            owner_key.as_ref(),
-            device_key.as_ref(),
-            &[bump],
-        ];
-        let signer = &[&seeds[..]];
-
-        let cpi_context = CpiContext::new_with_signer(
-            ctx.accounts.system_program.to_account_info(),
-            system_program::Transfer {
-                from: session_state.to_account_info(), // The PDA vault
-                to: ctx.accounts.target.to_account_info(),
-            },
-            signer,
+        // 3. The vault must stay rent-exempt after paying out
+        let session_info = session_state.to_account_info();
+        let rent_minimum = Rent::get()?.minimum_balance(session_info.data_len());
+        require!(
+            session_info.lamports().saturating_sub(amount) >= rent_minimum,
+            ErrorCode::InsufficientVaultBalance
         );
 
-        system_program::transfer(cpi_context, amount)?;
+        // 4. Update state
+        session_state.total_spent = new_total;
+
+        // 5. Move lamports directly: the PDA carries account data, so a System
+        //    Program transfer would fail with "`from` must not carry data".
+        //    Program-owned accounts debit/credit their own lamports instead.
+        let session_info = session_state.to_account_info();
+        **session_info.try_borrow_mut_lamports()? -= amount;
+        **ctx.accounts.target.try_borrow_mut_lamports()? += amount;
 
         msg!("M2M Payment Executed: {} lamports", amount);
         Ok(())
@@ -161,4 +155,8 @@ pub enum ErrorCode {
     UnauthorizedDevice,
     #[msg("The requested payment exceeds the session spending limit.")]
     SpendingLimitExceeded,
+    #[msg("Spending total overflowed.")]
+    AmountOverflow,
+    #[msg("The vault does not hold enough lamports to pay this amount and stay rent-exempt.")]
+    InsufficientVaultBalance,
 }

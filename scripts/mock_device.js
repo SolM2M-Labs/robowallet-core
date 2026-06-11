@@ -11,7 +11,7 @@ const {
 const bs58 = require('bs58');
 
 // The live deployed Program ID
-const PROGRAM_ID = new PublicKey("896w2abQMjM5KGABmDL8uuxhCCyF2GtwAL6rGPgeJxN4");
+const PROGRAM_ID = new PublicKey("ArgvLnQ5UhqJ9Ks7JF7nycbUJNzAgwR136LqzBNCCux9");
 
 async function main() {
     console.log("🤖 RoboWallet M2M Device Simulator");
