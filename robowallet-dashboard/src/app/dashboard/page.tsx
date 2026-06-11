@@ -3,8 +3,8 @@
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { useWallet } from '@solana/wallet-adapter-react';
-import { Connection, PublicKey, SystemProgram, Transaction, TransactionInstruction } from '@solana/web3.js';
-import { useEffect, useMemo, useState } from 'react';
+import { Connection, PublicKey, SystemProgram, Transaction, TransactionInstruction, LAMPORTS_PER_SOL } from '@solana/web3.js';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ROBOWALLET_PROGRAM_ID, SOLANA_RPC_URL } from '../config';
 
 // Next.js dynamic import for the Wallet button to avoid SSR hydration issues
@@ -13,442 +13,530 @@ const WalletMultiButton = dynamic(
   { ssr: false }
 );
 
+// ---------- On-chain constants ----------
+
+const PROGRAM_KEY = new PublicKey(ROBOWALLET_PROGRAM_ID);
+
+const DISC = {
+  initialize: '45825cec6be79f81',
+  execute: '56040707788be88b',
+  close: '4472b28cde26f8d3',
+} as const;
+
+// ---------- Decoding helpers (no extra deps) ----------
+
+const B58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+
+function b58decode(s: string): Uint8Array {
+  const bytes: number[] = [];
+  for (const c of s) {
+    let v = B58_ALPHABET.indexOf(c);
+    if (v < 0) return new Uint8Array();
+    for (let i = 0; i < bytes.length; i++) {
+      v += bytes[i] * 58;
+      bytes[i] = v & 0xff;
+      v >>= 8;
+    }
+    while (v > 0) {
+      bytes.push(v & 0xff);
+      v >>= 8;
+    }
+  }
+  for (const c of s) {
+    if (c === '1') bytes.push(0);
+    else break;
+  }
+  return new Uint8Array(bytes.reverse());
+}
+
+function toHex(bytes: Uint8Array): string {
+  return Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+function readU64LE(bytes: Uint8Array, offset: number): number {
+  const view = new DataView(bytes.buffer, bytes.byteOffset + offset, 8);
+  return Number(view.getBigUint64(0, true));
+}
+
+function timeAgo(unixSeconds: number | null | undefined): string {
+  if (!unixSeconds) return '—';
+  const diff = Math.max(0, Math.floor(Date.now() / 1000) - unixSeconds);
+  if (diff < 60) return `${diff}s ago`;
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return `${Math.floor(diff / 86400)}d ago`;
+}
+
+function shortAddr(addr: string, n = 4): string {
+  return `${addr.slice(0, n)}…${addr.slice(-n)}`;
+}
+
+// ---------- Types ----------
+
+interface SessionState {
+  owner: string;
+  deviceKey: string;
+  spendingLimit: number; // lamports
+  totalSpent: number;    // lamports
+}
+
+interface ActivityEntry {
+  signature: string;
+  slot: number;
+  blockTime: number | null;
+  err: boolean;
+  kind: 'initialize' | 'payment' | 'close' | 'deploy' | 'other';
+  amount: number | null; // lamports (payment amount or init limit)
+}
+
 interface AlertInfo {
   type: 'success' | 'error';
   message: string;
   signature?: string;
 }
 
+const KIND_META: Record<ActivityEntry['kind'], { icon: string; label: string; className: string }> = {
+  initialize: { icon: '🔑', label: 'Session Initialized', className: 'kind-init' },
+  payment: { icon: '⚡', label: 'M2M Payment', className: 'kind-payment' },
+  close: { icon: '🔒', label: 'Session Closed', className: 'kind-close' },
+  deploy: { icon: '🛠️', label: 'Program Deploy', className: 'kind-other' },
+  other: { icon: '📡', label: 'Program Activity', className: 'kind-other' },
+};
+
+// ---------- Page ----------
+
 export default function Dashboard() {
   const { publicKey, sendTransaction } = useWallet();
   // One shared connection for the whole page — creating a new Connection per
   // request multiplies sockets and trips the public RPC's per-IP rate limit.
   const connection = useMemo(() => new Connection(SOLANA_RPC_URL, 'confirmed'), []);
+
   const [currentSlot, setCurrentSlot] = useState<number | null>(null);
-  const [networkStatus, setNetworkStatus] = useState<string>("Connecting...");
+  const [networkStatus, setNetworkStatus] = useState<string>('Connecting…');
   const [notification, setNotification] = useState<AlertInfo | null>(null);
 
-  const [deviceInput, setDeviceInput] = useState<string>("5sxEFwxCv8E4c8Pa1nMxLYLp7czhXbHeWoo59ScJ5tJ8"); // default mock device
-  const [pdaAddress, setPdaAddress] = useState<string>("");
+  const [deviceInput, setDeviceInput] = useState<string>('5sxEFwxCv8E4c8Pa1nMxLYLp7czhXbHeWoo59ScJ5tJ8');
+  const [pdaAddress, setPdaAddress] = useState<string>('');
   const [pdaBalance, setPdaBalance] = useState<number | null>(null);
-  const [spendingLimitInput, setSpendingLimitInput] = useState<string>("0.05"); // default limit in SOL
-  const [isInitializing, setIsInitializing] = useState<boolean>(false);
-  const [isRevoking, setIsRevoking] = useState<boolean>(false);
-  const [recentTransactions, setRecentTransactions] = useState<any[]>([]);
+  const [session, setSession] = useState<SessionState | null>(null);
+  const [spendingLimitInput, setSpendingLimitInput] = useState<string>('0.05');
+  const [depositInput, setDepositInput] = useState<string>('0.05');
+  const [busy, setBusy] = useState<string | null>(null); // 'init' | 'revoke' | 'deposit'
+  const [activity, setActivity] = useState<ActivityEntry[]>([]);
+  const [activityLoaded, setActivityLoaded] = useState(false);
 
-  // Compute PDA when publicKey or deviceInput changes
+  // ----- PDA derivation -----
   useEffect(() => {
     if (!publicKey || !deviceInput) {
-      setPdaAddress("");
+      setPdaAddress('');
       setPdaBalance(null);
+      setSession(null);
       return;
     }
     try {
-      const ownerPubkey = publicKey;
       const devicePubkey = new PublicKey(deviceInput.trim());
       const [pda] = PublicKey.findProgramAddressSync(
-        [
-          Buffer.from("session"),
-          ownerPubkey.toBuffer(),
-          devicePubkey.toBuffer()
-        ],
-        new PublicKey(ROBOWALLET_PROGRAM_ID)
+        [Buffer.from('session'), publicKey.toBuffer(), devicePubkey.toBuffer()],
+        PROGRAM_KEY
       );
       setPdaAddress(pda.toBase58());
-    } catch (e) {
-      setPdaAddress("Invalid Device Address");
+    } catch {
+      setPdaAddress('invalid');
       setPdaBalance(null);
+      setSession(null);
     }
   }, [publicKey, deviceInput]);
 
-  // Fetch block info, PDA balance, and recent program tx signatures
-  useEffect(() => {
-    const fetchSolanaData = async () => {
-      try {
-        const slot = await connection.getSlot();
-        setCurrentSlot(slot);
-        setNetworkStatus("Connected (Devnet)");
+  // ----- Polling: slot, vault state, decoded activity -----
+  const refresh = useCallback(async () => {
+    try {
+      const slot = await connection.getSlot();
+      setCurrentSlot(slot);
+      setNetworkStatus('Connected (Devnet)');
 
-        // Fetch PDA Balance
-        if (pdaAddress && pdaAddress !== "Invalid Device Address") {
-          try {
-            const bal = await connection.getBalance(new PublicKey(pdaAddress));
-            setPdaBalance(bal / 1e9); // convert to SOL
-          } catch (e) {
-            setPdaBalance(0);
-          }
-        }
-
-        // Fetch Program Tx Signatures
+      // Vault: balance + decoded SessionState account
+      if (pdaAddress && pdaAddress !== 'invalid') {
         try {
-          const sigs = await connection.getSignaturesForAddress(
-            new PublicKey(ROBOWALLET_PROGRAM_ID),
-            { limit: 8 }
-          );
-          setRecentTransactions(sigs);
-        } catch (txErr) {
-          console.error("Error fetching transactions:", txErr);
+          const info = await connection.getAccountInfo(new PublicKey(pdaAddress));
+          if (info) {
+            setPdaBalance(info.lamports / LAMPORTS_PER_SOL);
+            const data = new Uint8Array(info.data);
+            // SessionState: disc(8) + owner(32) + device(32) + limit(8) + spent(8) + bump(1)
+            if (data.length >= 89) {
+              setSession({
+                owner: new PublicKey(data.slice(8, 40)).toBase58(),
+                deviceKey: new PublicKey(data.slice(40, 72)).toBase58(),
+                spendingLimit: readU64LE(data, 72),
+                totalSpent: readU64LE(data, 80),
+              });
+            }
+          } else {
+            setPdaBalance(null);
+            setSession(null);
+          }
+        } catch {
+          setPdaBalance(null);
+          setSession(null);
         }
+      }
 
+      // Decoded program activity
+      try {
+        const sigs = await connection.getSignaturesForAddress(PROGRAM_KEY, { limit: 10 });
+        const txs = await connection.getParsedTransactions(
+          sigs.map((s) => s.signature),
+          { maxSupportedTransactionVersion: 0 }
+        );
+        // Key decoded info by each tx's own signature — array order from the
+        // RPC is not guaranteed to match the requested signature order.
+        const decodedBySig = new Map<string, { kind: ActivityEntry['kind']; amount: number | null }>();
+        for (const tx of txs) {
+          if (!tx) continue;
+          let kind: ActivityEntry['kind'] = 'other';
+          let amount: number | null = null;
+          for (const ix of tx.transaction.message.instructions) {
+            const pid = 'programId' in ix ? ix.programId.toBase58() : '';
+            if (pid === ROBOWALLET_PROGRAM_ID && 'data' in ix) {
+              const raw = b58decode(ix.data);
+              const disc = toHex(raw.slice(0, 8));
+              if (disc === DISC.execute) {
+                kind = 'payment';
+                if (raw.length >= 16) amount = readU64LE(raw, 8);
+              } else if (disc === DISC.initialize) {
+                kind = 'initialize';
+                if (raw.length >= 48) amount = readU64LE(raw, 40);
+              } else if (disc === DISC.close) {
+                kind = 'close';
+              }
+            } else if (pid === 'BPFLoaderUpgradeab1e11111111111111111111111' && kind === 'other') {
+              kind = 'deploy';
+            }
+          }
+          decodedBySig.set(tx.transaction.signatures[0], { kind, amount });
+        }
+        const entries: ActivityEntry[] = sigs.map((s) => {
+          const decoded = decodedBySig.get(s.signature) ?? { kind: 'other' as const, amount: null };
+          return {
+            signature: s.signature,
+            slot: s.slot,
+            blockTime: s.blockTime ?? null,
+            err: !!s.err,
+            kind: decoded.kind,
+            amount: decoded.amount,
+          };
+        });
+        setActivity(entries);
+        setActivityLoaded(true);
       } catch (e) {
-        console.error(e);
-        setNetworkStatus("Offline");
+        console.error('activity fetch failed', e);
       }
-    };
+    } catch (e) {
+      console.error(e);
+      setNetworkStatus('Offline');
+    }
+  }, [connection, pdaAddress]);
 
-    fetchSolanaData();
-    // 15s keeps us well under the public RPC's per-IP budget (was 5s → constant 429s)
-    const interval = setInterval(fetchSolanaData, 15000);
+  useEffect(() => {
+    refresh();
+    // 15s keeps us well under RPC per-IP budgets
+    const interval = setInterval(refresh, 15000);
     return () => clearInterval(interval);
-  }, [pdaAddress, connection]);
+  }, [refresh]);
 
-  const handleInitializeSession = async () => {
-    if (!publicKey || !deviceInput || !pdaAddress || pdaAddress === "Invalid Device Address") {
-      setNotification({
-        type: 'error',
-        message: "Please connect wallet and provide a valid device address."
-      });
-      return;
+  // ----- Actions -----
+
+  const guard = (): boolean => {
+    if (!publicKey || !pdaAddress || pdaAddress === 'invalid') {
+      setNotification({ type: 'error', message: 'Connect your wallet and enter a valid device address first.' });
+      return false;
     }
-    setIsInitializing(true);
-    setNotification(null); // clear previous
+    return true;
+  };
+
+  const runTx = async (label: string, build: () => TransactionInstruction[], successMsg: string) => {
+    if (!guard()) return;
+    setBusy(label);
+    setNotification(null);
     try {
+      const tx = new Transaction();
+      for (const ix of build()) tx.add(ix);
+      const signature = await sendTransaction(tx, connection);
+      setNotification({ type: 'success', message: successMsg, signature });
+      // give devnet a moment, then refresh state
+      setTimeout(refresh, 2500);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setNotification({ type: 'error', message: `Transaction failed: ${msg}` });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleInitialize = () =>
+    runTx('init', () => {
       const devicePubkey = new PublicKey(deviceInput.trim());
-      const limitLamports = parseFloat(spendingLimitInput) * 1e9;
-
-      // Layout instruction data:
-      // - Discriminator: 8 bytes (45 82 5c ec 6b e7 9f 81)
-      // - Device Pubkey: 32 bytes
-      // - Spending Limit: u64 (8 bytes, little-endian)
-      const discriminator = Buffer.from([0x45, 0x82, 0x5c, 0xec, 0x6b, 0xe7, 0x9f, 0x81]);
+      const limitLamports = BigInt(Math.round(parseFloat(spendingLimitInput) * LAMPORTS_PER_SOL));
       const limitBuf = Buffer.alloc(8);
-      let val = BigInt(limitLamports);
-      for (let i = 0; i < 8; i++) {
-        limitBuf[i] = Number(val & BigInt(0xff));
-        val >>= BigInt(8);
-      }
-      const data = Buffer.concat([discriminator, devicePubkey.toBuffer(), limitBuf]);
-
-      const keys = [
-        { pubkey: new PublicKey(pdaAddress), isSigner: false, isWritable: true },
-        { pubkey: publicKey, isSigner: true, isWritable: true },
-        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }
+      limitBuf.writeBigUInt64LE(limitLamports);
+      const data = Buffer.concat([
+        Buffer.from(DISC.initialize, 'hex'),
+        devicePubkey.toBuffer(),
+        limitBuf,
+      ]);
+      return [
+        new TransactionInstruction({
+          programId: PROGRAM_KEY,
+          keys: [
+            { pubkey: new PublicKey(pdaAddress), isSigner: false, isWritable: true },
+            { pubkey: publicKey!, isSigner: true, isWritable: true },
+            { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+          ],
+          data,
+        }),
       ];
+    }, 'Session vault initialized on-chain.');
 
-      const instruction = new TransactionInstruction({
-        keys,
-        programId: new PublicKey(ROBOWALLET_PROGRAM_ID),
-        data
-      });
-
-      const tx = new Transaction().add(instruction);
-      const signature = await sendTransaction(tx, connection);
-      setNotification({
-        type: 'success',
-        message: "Session PDA Vault successfully initialized!",
-        signature
-      });
-    } catch (e: any) {
-      console.error(e);
-      setNotification({
-        type: 'error',
-        message: `Transaction failed: ${e.message}`
-      });
-    } finally {
-      setIsInitializing(false);
-    }
-  };
-
-  const handleRevokeSession = async () => {
-    if (!publicKey || !deviceInput || !pdaAddress || pdaAddress === "Invalid Device Address") {
-      setNotification({
-        type: 'error',
-        message: "Please connect wallet and provide a valid device address."
-      });
-      return;
-    }
-    setIsRevoking(true);
-    setNotification(null); // clear previous
-    try {
-      // Discriminator: 8 bytes (44 72 b2 8c de 26 f8 d3)
-      const data = Buffer.from([0x44, 0x72, 0xb2, 0x8c, 0xde, 0x26, 0xf8, 0xd3]);
-
-      const keys = [
-        { pubkey: new PublicKey(pdaAddress), isSigner: false, isWritable: true },
-        { pubkey: publicKey, isSigner: true, isWritable: true },
-        { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }
+  const handleDeposit = () =>
+    runTx('deposit', () => {
+      const lamports = Math.round(parseFloat(depositInput) * LAMPORTS_PER_SOL);
+      return [
+        SystemProgram.transfer({
+          fromPubkey: publicKey!,
+          toPubkey: new PublicKey(pdaAddress),
+          lamports,
+        }),
       ];
+    }, `Deposited ${depositInput} SOL into the session vault.`);
 
-      const instruction = new TransactionInstruction({
-        keys,
-        programId: new PublicKey(ROBOWALLET_PROGRAM_ID),
-        data
-      });
+  const handleRevoke = () =>
+    runTx('revoke', () => [
+      new TransactionInstruction({
+        programId: PROGRAM_KEY,
+        keys: [
+          { pubkey: new PublicKey(pdaAddress), isSigner: false, isWritable: true },
+          { pubkey: publicKey!, isSigner: true, isWritable: true },
+          { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+        ],
+        data: Buffer.from(DISC.close, 'hex'),
+      }),
+    ], 'Session revoked — rent and remaining funds returned to your wallet.');
 
-      const tx = new Transaction().add(instruction);
-      const signature = await sendTransaction(tx, connection);
-      setNotification({
-        type: 'success',
-        message: "Session PDA Vault successfully revoked!",
-        signature
-      });
-    } catch (e: any) {
-      console.error(e);
-      setNotification({
-        type: 'error',
-        message: `Revocation failed: ${e.message}`
-      });
-    } finally {
-      setIsRevoking(false);
-    }
-  };
+  // ----- Derived view state -----
+
+  const sessionActive = session !== null;
+  const spentPct = session && session.spendingLimit > 0
+    ? Math.min(100, (session.totalSpent / session.spendingLimit) * 100)
+    : 0;
 
   return (
     <div className="dashboard-layout">
       {/* Sidebar */}
       <aside className="sidebar">
-        <Link href="/" className="brand" style={{ display: 'flex', alignItems: 'center', gap: '12px', textDecoration: 'none', color: 'inherit', cursor: 'pointer' }}>
-          <img src="/logo.png" alt="RoboWallet Logo" style={{ width: '40px', height: '40px', borderRadius: '8px', border: '1px solid var(--accent-purple)' }} />
+        <Link href="/" className="brand">
+          <img src="/logo.png" alt="RoboWallet Logo" className="brand-logo" />
           <span>RoboWallet</span>
         </Link>
-        <nav style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-          <a href="#" className="nav-link active">
-            <span>📊</span> Fleet Dashboard
+        <nav className="sidebar-nav">
+          <span className="nav-link active"><span>📊</span> Fleet Dashboard</span>
+          <Link href="/docs" className="nav-link"><span>📖</span> API Docs</Link>
+          <a href="https://github.com/SolM2M-Labs/robowallet-core" target="_blank" rel="noopener noreferrer" className="nav-link">
+            <span>🛠️</span> GitHub
           </a>
-          <a href="#" className="nav-link">
-            <span>⚙️</span> Node Settings
-          </a>
-          <a href="#" className="nav-link">
-            <span>🔑</span> Session Keys
-          </a>
-          <Link href="/docs" className="nav-link">
-            <span>📖</span> API Docs
-          </Link>
           <a href="https://x.com/RoboWallet_sdk" target="_blank" rel="noopener noreferrer" className="nav-link">
             <span>🐦</span> Twitter
           </a>
-          <Link href="/" className="nav-link" style={{ marginTop: 'auto', borderTop: '1px dashed var(--border-dim)', paddingTop: '16px', color: 'var(--accent-yellow)', fontWeight: 'bold' }}>
-            <span>🏠</span> Back to Home
-          </Link>
+          <Link href="/" className="nav-link nav-home"><span>🏠</span> Back to Home</Link>
         </nav>
       </aside>
 
       {/* Main Content */}
       <main className="main-content">
-        <header className="top-bar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <Link href="/" style={{ background: 'rgba(255, 255, 255, 0.05)', padding: '8px 12px', borderRadius: '8px', color: 'var(--text-main)', textDecoration: 'none', border: '1px solid var(--border-dim)' }}>
-              ← Home
-            </Link>
-            <div>
-              <h1 className="page-title">Fleet Overview</h1>
-              {publicKey && (
-                <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '4px', fontFamily: 'var(--font-mono)' }}>
-                  Identity: {publicKey.toBase58().slice(0, 8)}...{publicKey.toBase58().slice(-8)}
-                </p>
-              )}
-            </div>
+        <header className="top-bar">
+          <div>
+            <h1 className="page-title">Fleet Overview</h1>
+            {publicKey && (
+              <p className="identity-line">Identity: {shortAddr(publicKey.toBase58(), 8)}</p>
+            )}
           </div>
-          {/* Replaced standard button with Solana Wallet Adapter Button */}
-          <div style={{ filter: 'drop-shadow(0 0 10px rgba(153,69,255,0.2))' }}>
-            <WalletMultiButton style={{ background: 'transparent', border: '1px solid var(--accent-purple)', color: 'var(--text-main)', fontFamily: 'var(--font-mono)' }} />
+          <div className="wallet-btn-wrap">
+            <WalletMultiButton />
           </div>
         </header>
 
         {notification && (
-          <div style={{
-            background: notification.type === 'success' ? 'rgba(39, 201, 63, 0.1)' : 'rgba(255, 77, 77, 0.1)',
-            border: notification.type === 'success' ? '1px solid var(--success-green)' : '1px solid #ff4d4d',
-            color: notification.type === 'success' ? 'var(--success-green)' : '#ff4d4d',
-            padding: '16px',
-            borderRadius: '8px',
-            marginBottom: '20px',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            boxShadow: notification.type === 'success' ? '0 0 15px rgba(39, 201, 63, 0.15)' : '0 0 15px rgba(255, 77, 77, 0.15)',
-            fontFamily: 'var(--font-sans)'
-          }}>
+          <div className={`notice ${notification.type === 'success' ? 'notice-success' : 'notice-error'}`}>
             <div>
-              <span style={{ fontWeight: 'bold', marginRight: '8px' }}>
-                {notification.type === 'success' ? '🚀 Success:' : '❌ Error:'}
-              </span>
+              <strong>{notification.type === 'success' ? '🚀 Success:' : '❌ Error:'}</strong>{' '}
               {notification.message}
               {notification.signature && (
-                <span style={{ marginLeft: '8px' }}>
-                  | Signature:{' '}
+                <>
+                  {' '}
                   <a
+                    className="notice-link"
                     href={`https://explorer.solana.com/tx/${notification.signature}?cluster=devnet`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    style={{ color: 'var(--accent-yellow)', textDecoration: 'none', fontWeight: 'bold', fontFamily: 'var(--font-mono)' }}
                   >
-                    {notification.signature.slice(0, 8)}...{notification.signature.slice(-8)}
+                    View on Explorer ({shortAddr(notification.signature, 6)})
                   </a>
-                </span>
+                </>
               )}
             </div>
-            <button
-              onClick={() => setNotification(null)}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                color: 'inherit',
-                cursor: 'pointer',
-                fontSize: '1.2rem',
-                lineHeight: 1,
-                padding: '0 4px'
-              }}
-            >
-              ×
-            </button>
+            <button className="notice-close" onClick={() => setNotification(null)}>×</button>
           </div>
         )}
 
         {/* Top Metrics Grid */}
         <div className="grid-container">
-          {/* Network Status Panel */}
-          <div className="glass-panel" style={{ borderLeft: networkStatus.includes('Connected') ? '4px solid var(--success-green)' : '4px solid var(--accent-yellow)' }}>
+          {/* Network Status */}
+          <div className={`glass-panel ${networkStatus.includes('Connected') ? 'edge-green' : 'edge-yellow'}`}>
             <div className="panel-header">
               <span>Network Status</span>
-              <span className="badge" style={{ background: networkStatus.includes('Connected') ? 'rgba(39, 201, 63, 0.1)' : 'rgba(255, 189, 46, 0.1)', color: networkStatus.includes('Connected') ? 'var(--success-green)' : 'var(--accent-yellow)' }}>
+              <span className={`badge ${networkStatus.includes('Connected') ? 'badge-green' : 'badge-yellow'}`}>
+                {networkStatus.includes('Connected') && <span className="pulse-dot" />}
                 {networkStatus}
               </span>
             </div>
-            <div className="panel-value highlight" style={{ fontSize: '1.5rem', wordBreak: 'break-all' }}>
-              {currentSlot ? `Slot: ${currentSlot.toLocaleString()}` : "Syncing..."}
+            <div className="panel-value slot-value">
+              {currentSlot ? `Slot ${currentSlot.toLocaleString()}` : 'Syncing…'}
             </div>
-            <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: '8px', fontFamily: 'var(--font-mono)' }}>
-              Contract: {ROBOWALLET_PROGRAM_ID.slice(0, 10)}...{ROBOWALLET_PROGRAM_ID.slice(-10)}
+            <div className="mono-sub">
+              Program: <a
+                className="addr-link"
+                href={`https://explorer.solana.com/address/${ROBOWALLET_PROGRAM_ID}?cluster=devnet`}
+                target="_blank" rel="noopener noreferrer"
+              >{shortAddr(ROBOWALLET_PROGRAM_ID, 8)}</a>
             </div>
           </div>
 
-          {/* Session Key Vault Panel */}
-          <div className="glass-panel" style={{ borderLeft: pdaBalance !== null ? '4px solid var(--accent-purple)' : '4px solid var(--border-dim)' }}>
+          {/* Session Vault */}
+          <div className={`glass-panel ${sessionActive ? 'edge-purple' : ''}`}>
             <div className="panel-header">
               <span>Session PDA Vault</span>
-              <span className="badge" style={{ background: 'rgba(153, 69, 255, 0.1)', color: 'var(--accent-purple)' }}>
-                Active
+              <span className={`badge ${sessionActive ? 'badge-purple' : 'badge-dim'}`}>
+                {sessionActive ? 'Active' : publicKey ? 'No Session' : 'Wallet Not Connected'}
               </span>
             </div>
-            <div className="panel-value highlight" style={{ fontSize: '1.1rem', wordBreak: 'break-all', fontFamily: 'var(--font-mono)', minHeight: '44px', display: 'flex', alignItems: 'center' }}>
-              {pdaAddress ? `${pdaAddress.slice(0, 12)}...${pdaAddress.slice(-12)}` : "Connect Wallet"}
+
+            <div className="vault-addr">
+              {pdaAddress === 'invalid'
+                ? 'Invalid device address'
+                : pdaAddress
+                  ? <a className="addr-link" href={`https://explorer.solana.com/address/${pdaAddress}?cluster=devnet`} target="_blank" rel="noopener noreferrer">{shortAddr(pdaAddress, 10)}</a>
+                  : 'Connect wallet to derive vault'}
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '12px' }}>
-              <div style={{ color: 'var(--text-main)', fontSize: '1rem', fontWeight: 'bold' }}>
-                Balance: {pdaBalance !== null ? `${pdaBalance.toFixed(4)} SOL` : "N/A"}
-              </div>
-              {pdaBalance !== null && pdaBalance > 0 && publicKey && (
-                <button
-                  onClick={handleRevokeSession}
-                  disabled={isRevoking}
-                  style={{
-                    background: 'rgba(255, 77, 77, 0.1)',
-                    border: '1px solid #ff4d4d',
-                    color: '#ff4d4d',
-                    padding: '4px 8px',
-                    borderRadius: '4px',
-                    fontSize: '0.75rem',
-                    cursor: 'pointer',
-                    fontWeight: 'bold'
-                  }}
-                >
-                  {isRevoking ? "Revoking..." : "Revoke"}
-                </button>
-              )}
+
+            <div className="vault-balance">
+              Balance: <strong>{pdaBalance !== null ? `${pdaBalance.toFixed(4)} SOL` : '—'}</strong>
             </div>
+
+            {session && (
+              <>
+                <div className="progress-row">
+                  <span>Spent {(session.totalSpent / LAMPORTS_PER_SOL).toFixed(4)} / {(session.spendingLimit / LAMPORTS_PER_SOL).toFixed(4)} SOL</span>
+                  <span>{spentPct.toFixed(0)}%</span>
+                </div>
+                <div className="progress-track">
+                  <div className={`progress-fill ${spentPct >= 90 ? 'fill-red' : spentPct >= 60 ? 'fill-yellow' : ''}`} style={{ width: `${spentPct}%` }} />
+                </div>
+                <div className="vault-actions">
+                  <input
+                    type="number" step="0.01" min="0"
+                    className="input-field input-small"
+                    value={depositInput}
+                    onChange={(e) => setDepositInput(e.target.value)}
+                    placeholder="SOL"
+                  />
+                  <button className="btn btn-purple" onClick={handleDeposit} disabled={busy !== null}>
+                    {busy === 'deposit' ? 'Depositing…' : 'Deposit'}
+                  </button>
+                  <button className="btn btn-red" onClick={handleRevoke} disabled={busy !== null}>
+                    {busy === 'revoke' ? 'Revoking…' : 'Revoke'}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
 
-          {/* Session Initializer Panel */}
-          <div className="glass-panel" style={{ border: '1px solid var(--accent-purple)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <div className="panel-header" style={{ color: 'var(--text-main)' }}>
-              <span>🔑 Initialize Session Vault</span>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              <input 
-                type="text" 
-                placeholder="Device Public Key (Base58)" 
+          {/* Initialize Session */}
+          <div className="glass-panel edge-purple">
+            <div className="panel-header"><span>🔑 Initialize Session Vault</span></div>
+            <div className="form-stack">
+              <label className="field-label">Device public key</label>
+              <input
+                type="text"
+                className="input-field"
+                placeholder="Device Public Key (Base58)"
                 value={deviceInput}
                 onChange={(e) => setDeviceInput(e.target.value)}
-                style={{ 
-                  background: 'rgba(0,0,0,0.3)', 
-                  border: '1px solid var(--border-dim)', 
-                  padding: '6px 10px', 
-                  borderRadius: '6px',
-                  color: 'white',
-                  fontSize: '0.8rem',
-                  fontFamily: 'var(--font-mono)'
-                }} 
               />
-              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                <input 
-                  type="number" 
-                  step="0.01"
-                  placeholder="Limit (SOL)" 
+              <label className="field-label">Spending limit (SOL)</label>
+              <div className="form-row">
+                <input
+                  type="number" step="0.01" min="0"
+                  className="input-field"
+                  placeholder="Limit (SOL)"
                   value={spendingLimitInput}
                   onChange={(e) => setSpendingLimitInput(e.target.value)}
-                  style={{ 
-                    flex: 1,
-                    background: 'rgba(0,0,0,0.3)', 
-                    border: '1px solid var(--border-dim)', 
-                    padding: '6px 10px', 
-                    borderRadius: '6px',
-                    color: 'white',
-                    fontSize: '0.8rem',
-                    fontFamily: 'var(--font-mono)'
-                  }} 
                 />
-                <button 
-                  onClick={handleInitializeSession}
-                  disabled={isInitializing || !publicKey}
-                  className="connect-btn" 
-                  style={{ 
-                    padding: '6px 12px', 
-                    background: publicKey ? 'rgba(153, 69, 255, 0.2)' : 'rgba(255, 255, 255, 0.05)', 
-                    borderColor: publicKey ? 'var(--accent-purple)' : 'var(--border-dim)', 
-                    color: publicKey ? 'var(--accent-purple)' : 'var(--text-muted)',
-                    cursor: publicKey ? 'pointer' : 'not-allowed',
-                    fontSize: '0.8rem',
-                    fontWeight: 'bold'
-                  }}
+                <button
+                  className="btn btn-solid-purple"
+                  onClick={handleInitialize}
+                  disabled={busy !== null || !publicKey || sessionActive}
+                  title={sessionActive ? 'Session already exists for this device' : undefined}
                 >
-                  {isInitializing ? "WAIT..." : "INITIALIZE"}
+                  {busy === 'init' ? 'Wait…' : sessionActive ? 'Active' : 'Initialize'}
                 </button>
               </div>
+              {!publicKey && <p className="hint-line">Connect a wallet to create a session.</p>}
             </div>
           </div>
         </div>
 
-        {/* Live Transaction Feed */}
-        <div className="glass-panel" style={{ flex: 1, marginTop: '20px' }}>
+        {/* Decoded Activity Feed */}
+        <div className="glass-panel activity-panel">
           <div className="panel-header">
-            <span>Live Node Activity (On-Chain Devnet)</span>
-            <span className="badge" style={{ background: 'rgba(39, 201, 63, 0.1)', color: 'var(--success-green)', borderColor: 'rgba(39, 201, 63, 0.2)'}}>Live Syncing</span>
+            <span>Program Activity (Devnet)</span>
+            <span className="badge badge-green"><span className="pulse-dot" /> Live</span>
           </div>
-          
-          <ul className="feed-list" style={{ maxHeight: '250px', overflowY: 'auto' }}>
-            {recentTransactions.length > 0 ? (
-              recentTransactions.map((tx, idx) => (
-                <li className="feed-item" key={idx} style={{ padding: '10px 0', borderBottom: '1px solid var(--border-dim)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div>
-                    <span style={{ marginRight: '12px' }}>⚡</span>
-                    Signature: <a href={`https://explorer.solana.com/tx/${tx.signature}?cluster=devnet`} target="_blank" rel="noopener noreferrer" className="tx-hash" style={{ color: 'var(--accent-yellow)', textDecoration: 'none' }}>
-                      {tx.signature.slice(0, 12)}...{tx.signature.slice(-12)}
-                    </a>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span className="badge" style={{ background: tx.err ? 'rgba(255,77,77,0.1)' : 'rgba(39,201,63,0.1)', color: tx.err ? '#ff4d4d' : 'var(--success-green)' }}>
-                      {tx.err ? "Failed" : "Success"}
-                    </span>
-                    <span className="tx-amount" style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>
-                      Slot: {tx.slot}
-                    </span>
-                  </div>
-                </li>
-              ))
+
+          <ul className="feed-list">
+            {activity.length > 0 ? (
+              activity.map((entry) => {
+                const meta = KIND_META[entry.kind];
+                return (
+                  <li className="activity-item" key={entry.signature}>
+                    <span className={`icon-bubble ${meta.className}`}>{meta.icon}</span>
+                    <div className="activity-main">
+                      <div className="activity-title">
+                        {meta.label}
+                        {entry.amount !== null && (
+                          <span className="activity-amount">
+                            {entry.kind === 'initialize' ? ' · limit ' : ' · '}
+                            {(entry.amount / LAMPORTS_PER_SOL).toFixed(4)} SOL
+                          </span>
+                        )}
+                      </div>
+                      <a
+                        className="activity-sig"
+                        href={`https://explorer.solana.com/tx/${entry.signature}?cluster=devnet`}
+                        target="_blank" rel="noopener noreferrer"
+                      >
+                        {shortAddr(entry.signature, 10)}
+                      </a>
+                    </div>
+                    <div className="activity-side">
+                      <span className={`badge ${entry.err ? 'badge-red' : 'badge-green'}`}>
+                        {entry.err ? 'Failed' : 'Success'}
+                      </span>
+                      <span className="activity-time">{timeAgo(entry.blockTime)}</span>
+                    </div>
+                  </li>
+                );
+              })
             ) : (
-              <li className="feed-item" style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '20px 0' }}>
-                No transactions found for Program ID.
+              <li className="empty-state">
+                {activityLoaded ? 'No transactions found for this program yet.' : 'Loading on-chain activity…'}
               </li>
             )}
           </ul>
