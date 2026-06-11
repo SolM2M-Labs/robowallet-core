@@ -1,4 +1,8 @@
+//! Ed25519 keypair handling for Solana (no_std).
+
 use ed25519_dalek::{SigningKey, VerifyingKey};
+
+use crate::encoding::base58_encode;
 
 /// Holds the Solana Keypair (Secret Key + Public Key)
 pub struct RoboKeypair {
@@ -7,32 +11,45 @@ pub struct RoboKeypair {
 }
 
 impl RoboKeypair {
-    /// Generates a new dummy keypair for testing
-    /// In production, this will use the ESP32 Hardware TRNG or ATECC608
-    pub fn generate_test_keypair() -> Self {
-        // A deterministic test seed for the MVP (Do NOT use in production!)
-        let test_seed: [u8; 32] = [
-            1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
-            17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32
-        ];
-        
-        let secret = SigningKey::from_bytes(&test_seed);
+    /// Derives a keypair from a 32-byte seed.
+    /// On hardware, feed this from the ESP32 TRNG or an ATECC608 secure element.
+    pub fn from_seed(seed: &[u8; 32]) -> Self {
+        let secret = SigningKey::from_bytes(seed);
         let public = VerifyingKey::from(&secret);
-
         Self { secret, public }
     }
 
-    /// Returns the Base58 formatted Solana Address
-    pub fn get_pubkey_string(&self, buffer: &mut [u8; 64]) -> Result<usize, ()> {
-        // MVP Mock: Actual base58 conversion requires allocation or complex no_std logic.
-        // For hardware RPC payload, the raw bytes are used.
-        let mock_str = b"Base58PubkeyMocked";
-        let len = mock_str.len();
-        buffer[..len].copy_from_slice(mock_str);
-        Ok(len)
+    /// Deterministic keypair for tests and demos only — never fund on mainnet.
+    pub fn generate_test_keypair() -> Self {
+        let mut test_seed = [0u8; 32];
+        for (i, b) in test_seed.iter_mut().enumerate() {
+            *b = (i + 1) as u8;
+        }
+        Self::from_seed(&test_seed)
     }
 
-    pub fn print_wallet_info(&self) {
-        // Logging removed for MVP
+    /// Writes the Base58 Solana address into `buffer`, returning its length (max 44).
+    pub fn get_pubkey_string(&self, buffer: &mut [u8; 64]) -> Result<usize, ()> {
+        base58_encode(self.public.as_bytes(), buffer)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_keypair_address_is_real_base58() {
+        let kp = RoboKeypair::generate_test_keypair();
+        let mut buf = [0u8; 64];
+        let len = kp.get_pubkey_string(&mut buf).unwrap();
+        // Solana addresses are 32-44 chars of base58
+        assert!(len >= 32 && len <= 44);
+        assert!(buf[..len].iter().all(|c| c.is_ascii_alphanumeric()));
+
+        // Round-trip back to the raw pubkey
+        let mut decoded = [0u8; 32];
+        crate::encoding::base58_decode(&buf[..len], &mut decoded).unwrap();
+        assert_eq!(&decoded, kp.public.as_bytes());
     }
 }
