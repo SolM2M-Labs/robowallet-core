@@ -1,40 +1,38 @@
-# RoboWallet Arduino IDE Library
+# RoboWallet Arduino Library
 
-This is the C/C++ FFI binding package for using the `no_std` RoboWallet Core SDK inside Arduino IDE projects (especially targeted at ESP32 microcontrollers).
+C++ bindings for the RoboWallet `no_std` Rust core, packaged as an Arduino IDE library
+for ESP32 microcontrollers. Build and sign **real Solana transactions** on-device —
+the private key never leaves the chip.
 
-## Library Structure
+## Installation
 
-To install this in the Arduino IDE, place the `arduino` folder into your Arduino libraries directory (usually `Documents/Arduino/libraries/RoboWallet`):
+Copy this `arduino` folder into your Arduino libraries directory
+(usually `Documents/Arduino/libraries/RoboWallet`):
 
 ```text
 RoboWallet/
 ├── library.properties
 ├── README.md
 ├── src/
-│   ├── robowallet.h
-│   ├── RoboWallet.h
+│   ├── robowallet_ffi.h        <-- C FFI declarations (implemented in Rust)
+│   ├── robowallet.h            <-- C++ wrapper class
 │   ├── RoboWallet.cpp
-│   └── librobowallet_core.a  <-- Compiled Rust static library goes here
+│   └── librobowallet_core.a    <-- Compiled Rust static library
 └── examples/
     └── SendTransfer/
         └── SendTransfer.ino
 ```
 
-## Step 1: Copy Compiled Static Library
+A prebuilt `librobowallet_core.a` for `riscv32imc` (ESP32-C3) ships with the library.
+To rebuild it from source:
 
-The library uses Rust's `staticlib` compilation target to pack the cryptography and transaction builders. 
-
-Compile the Rust core for the ESP32 RISC-V target (or your matching target architecture):
 ```bash
 cd core
-rustup run stable-x86_64-pc-windows-msvc cargo build --release --target riscv32imc-unknown-none-elf
+cargo build --release   # target riscv32imc-unknown-none-elf via .cargo/config.toml
+cp target/riscv32imc-unknown-none-elf/release/librobowallet_core.a ../bindings/arduino/src/
 ```
 
-Then copy the compiled static library `librobowallet_core.a` from `core/target/riscv32imc-unknown-none-elf/release/librobowallet_core.a` into `RoboWallet/src/`.
-
-## Step 2: Usage in Arduino
-
-Include `RoboWallet.h` and use the object-oriented API:
+## Usage
 
 ```cpp
 #include <RoboWallet.h>
@@ -43,26 +41,46 @@ RoboWallet wallet;
 
 void setup() {
   Serial.begin(115200);
-  
-  // Generate a keypair and print public key
-  String address = wallet.generateTestWallet();
-  Serial.print("Wallet Address: ");
-  Serial.println(address);
-  
-  // Construct a dummy transfer
-  uint8_t receiver[32] = {0}; // Add receiver bytes
-  uint8_t blockhash[32] = {9}; // Add recent blockhash bytes
-  uint64_t lamports = 5000000;
-  
-  bool success = wallet.buildAndSignTransfer(receiver, lamports, blockhash);
-  if (success) {
-    Serial.println("Transaction signed successfully!");
+
+  // 1. Derive the device identity from the hardware TRNG.
+  //    Persist the seed in NVS/EFuse to keep the same address across boots.
+  uint8_t seed[32];
+  for (int i = 0; i < 32; i += 4) {
+    uint32_t r = esp_random();
+    memcpy(seed + i, &r, 4);
   }
+  wallet.setSeed(seed);
+  Serial.println(wallet.getAddress());   // Base58 Solana address
+
+  // 2. Build a fully-signed SOL transfer (Solana wire format).
+  uint8_t receiver[32]  = { /* receiver pubkey bytes */ };
+  uint8_t blockhash[32] = { /* from getLatestBlockhash RPC */ };
+  uint8_t tx[256];
+  int32_t len = wallet.buildSignedTransfer(receiver, 5000000ULL, blockhash, tx, sizeof(tx));
+
+  // 3. base64-encode tx[0..len] and POST it to a Solana RPC via sendTransaction.
 }
 
 void loop() {}
 ```
 
-## Supported Architectures
-- ESP32, ESP32-S2, ESP32-C3, ESP32-S3
-- Any target supported by the `riscv32` / `xtensa` Rust embedded compiler toolchain.
+For session-vault payments (spending-limit protected), use
+`wallet.buildExecutePayment(programId, sessionPda, target, amount, blockhash, tx, sizeof(tx))`.
+
+## API
+
+| Method | Description |
+|---|---|
+| `setSeed(seed32)` | Set the device's Ed25519 seed and derive its Solana address |
+| `getAddress()` | Cached Base58 address |
+| `buildSignedTransfer(...)` | Fully-signed System transfer; returns tx byte length |
+| `buildExecutePayment(...)` | Fully-signed session-vault payment; returns tx byte length |
+| `generateTestWallet()` | Deterministic test keypair (demos only — never fund it) |
+
+All builders return the transaction length on success or a negative error code
+(`-1` bad argument, `-2` buffer too small, `-3` serialization failure).
+
+## Supported targets
+
+- ESP32-C3 (riscv32imc) — prebuilt library included
+- Any RISC-V / Xtensa target supported by the Rust embedded toolchain (rebuild the `.a`)

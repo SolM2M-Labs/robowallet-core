@@ -14,3 +14,8 @@ scripts/test_owner.json
 # Playwright MCP artifacts & local screenshots
 .playwright-mcp/
 *.jpeg
+
+# Local marketing drafts
+promo.html
+tweet*.html
+twitter_banner.html

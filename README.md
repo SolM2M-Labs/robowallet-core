@@ -1,53 +1,138 @@
-# RoboWallet Core (SolM2M)
+<div align="center">
 
-> **Bringing the Machine Economy to Solana.** 🤖 A lightweight, `no_std` embedded SDK and smart contract framework for DePIN, Robotics, and IoT.
+# RoboWallet
 
----
+**Autonomous machine-to-machine payments on Solana, from $5 microcontrollers.**
 
-## Monorepo Repository Structure
+A `no_std` embedded Rust SDK, an on-chain session-key program, and a fleet dashboard —
+everything a robot, drone, or IoT node needs to hold an identity and pay for what it consumes.
 
-This repository contains the complete end-to-end full stack architecture for RoboWallet:
+[Live Dashboard](https://robowallet-core.vercel.app) ·
+[Documentation](https://robowallet-core.vercel.app/docs) ·
+[Twitter](https://x.com/RoboWallet_sdk)
 
-- [**/core**](file:///d:/antilnx/robowallet/core): The core Rust SDK (strictly `no_std` for ESP32, RISC-V, and bare-metal targets). Exposes C/C++ FFI.
-- [**/bindings/arduino**](file:///d:/antilnx/robowallet/bindings/arduino): Foreign Function Interface (FFI) C++ wrappers and example sketches for Arduino IDE integration.
-- [**/robowallet_program**](file:///d:/antilnx/robowallet/robowallet_program): On-chain Solana smart contract (Anchor program) enforcing session keys and PDA spending limits.
-- [**/robowallet-dashboard**](file:///d:/antilnx/robowallet/robowallet-dashboard): Next.js Web Dashboard with live Solana Devnet RPC syncing, vault balance tracking, and session initialization.
-- [**/scripts**](file:///d:/antilnx/robowallet/scripts): Node.js mock testing scripts and device simulators.
+`Devnet Program: ArgvLnQ5UhqJ9Ks7JF7nycbUJNzAgwR136LqzBNCCux9`
 
----
-
-## Features
-
-- **Zero Allocations**: Pure `no_std` Rust without memory allocator overhead. Extremely fast compilation size (<150KB flash).
-- **Session Keys Protocol**: Safe delegation of spending limits on-chain to protect devices from physical theft.
-- **Direct RPC Streaming**: Lightweight base64 transaction serialization and JSON-RPC broadcasting over TCP socket.
-- **Double-Layer Security**: Supports secure element offloading (ATECC608) or software-level Session PDA vault verification.
+</div>
 
 ---
 
-## Quick Start
+## Why
 
-### 1. Compile the Core SDK & FFI staticlib
-Configure the target toolchain and compile:
+Machines are becoming economic actors: a drone pays a charging pad, a sensor sells its data, a robot
+pays for compute. But giving a device a full wallet is dangerous — steal the device, steal the funds.
+
+RoboWallet solves this with **on-chain session keys**:
+
+- The **owner** creates a *session vault* (a program-derived account) bound to one device key,
+  with a hard **spending limit** enforced by the Solana program itself.
+- The **device** signs payments with its own key — generated on-device from the hardware TRNG,
+  never leaving the chip — and can only spend within the owner-approved budget.
+- The owner can **revoke** the session at any time and recover every remaining lamport.
+
+A stolen device can never drain more than the session limit. A compromised server never sees the
+device key at all.
+
+## Architecture
+
+```
+┌─────────────────────┐   signed tx (wire format)   ┌──────────────────────┐
+│ ESP32-C3 / RISC-V   │ ──────── Wi-Fi/HTTP ──────► │ Solana RPC (devnet)  │
+│ robowallet_core     │                             └──────────┬───────────┘
+│ (no_std Rust + FFI) │                                        │
+└─────────────────────┘                                        ▼
+                                                    ┌──────────────────────┐
+┌─────────────────────┐   initialize / revoke      │ robowallet_program   │
+│ Owner (Phantom)     │ ─────────────────────────► │ Session PDA vault    │
+│ Fleet Dashboard     │ ◄──── live state/feed ──── │ + spending limits    │
+└─────────────────────┘                             └──────────────────────┘
+```
+
+| Directory | What it is |
+|---|---|
+| [`core/`](core) | `no_std` Rust SDK: Ed25519 keys, real Solana wire-format transactions, Base58/compact-u16 encoders, JSON-RPC framing — all stack-allocated, no heap |
+| [`bindings/arduino/`](bindings/arduino) | Arduino IDE library (C++ wrapper over the Rust FFI) for ESP32 boards |
+| [`robowallet_program/`](robowallet_program) | Anchor program: `initialize_session`, `execute_payment` (limit-enforced), `close_session` |
+| [`robowallet-dashboard/`](robowallet-dashboard) | Next.js fleet dashboard: live decoded program activity, session vault state, deposit/revoke |
+| [`scripts/`](scripts) | Device simulator and end-to-end on-chain verification suites |
+
+## How a payment works
+
+1. **Owner** opens the [dashboard](https://robowallet-core.vercel.app/dashboard), enters the device
+   public key and a spending limit, and initializes the session vault (one transaction).
+2. **Owner** deposits SOL into the vault. The vault is a PDA — not the device's wallet — so the
+   device never holds the funds.
+3. **Device** builds and signs an `execute_payment` transaction entirely on-chip
+   (`rw_build_execute_payment`), then broadcasts it over Wi-Fi as a plain HTTP POST.
+4. The **program** checks the device signature, enforces `total_spent + amount <= limit`
+   (overflow-safe), keeps the vault rent-exempt, and moves the lamports to the recipient.
+5. Over budget? The transaction is rejected on-chain with `SpendingLimitExceeded`.
+
+## Quick start
+
+### Build the embedded core (ESP32-C3, riscv32imc)
+
 ```bash
 cd core
-rustup run stable-x86_64-pc-windows-msvc cargo build --release --target riscv32imc-unknown-none-elf
+cargo build --release            # uses .cargo/config.toml target riscv32imc-unknown-none-elf
 ```
-This produces `librobowallet_core.a` in `core/target/riscv32imc-unknown-none-elf/release/` which can be dropped into the Arduino library folder.
 
-### 2. Run the Node.js Mock Device Simulator
-Simulate keypair generation, blockhash fetching, transaction construction, signing, and Solana Devnet broadcasting:
+Produces `librobowallet_core.a` for the Arduino library and the `robowallet_fw` firmware image.
+
+### Run the test suite on your host
+
+```bash
+cd core
+cargo test --no-default-features --target <your-host-triple>
+```
+
+### Verify transactions against web3.js (byte-for-byte)
+
+```bash
+cd core
+cargo build --bin txgen --no-default-features --features std-tools --target <your-host-triple>
+cd ../scripts && npm install
+node verify_core_tx.js
+```
+
+This proves the embedded builder emits transactions identical to `@solana/web3.js` output,
+and that `execute_payment` transactions deserialize, verify, and decode correctly.
+
+### Verify the on-chain program (devnet)
+
 ```bash
 cd scripts
-npm install
-node mock_device.js
+SOLANA_RPC_URL=<your devnet rpc> node verify_program.js
 ```
 
-### 3. Spin up the Dashboard locally
-Run the Next.js dev server:
+Runs the full lifecycle against the deployed program: initialize → fund → device payment →
+**over-limit payment (must be rejected)** → close with rent recovery.
+
+### Run the dashboard
+
 ```bash
 cd robowallet-dashboard
-npm install
-npm run dev
+npm install && npm run dev
 ```
-Open `http://localhost:3000` to monitor fleet slots, manage session limits, calculate PDA vaults, and watch live Devnet transaction logs.
+
+Set `NEXT_PUBLIC_SOLANA_RPC_URL` to a dedicated devnet RPC endpoint to avoid public rate limits.
+
+## Security model
+
+| Threat | Mitigation |
+|---|---|
+| Device theft | Vault spending limit enforced by the on-chain program, not the device |
+| Key extraction | Key derived from hardware TRNG on-device; ATECC608 secure-element offload planned |
+| Limit bypass | `checked_add` accounting + on-chain `require!`; verified by the negative test in `verify_program.js` |
+| Stuck funds | `close_session` returns rent and remaining balance to the owner at any time |
+| Vault rent loss | Payments that would drop the vault below rent exemption are rejected |
+
+## Status
+
+Running on **Solana devnet**. The full session lifecycle — including the spending-limit
+rejection path — is exercised end-to-end by the verification suite on every release.
+Mainnet deployment, secure-element integration, and SPL token support are on the roadmap.
+
+## License
+
+[MIT](LICENSE) © 2026 SolM2M Labs
