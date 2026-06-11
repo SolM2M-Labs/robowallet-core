@@ -4,7 +4,7 @@ import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { Connection, PublicKey, SystemProgram, Transaction, TransactionInstruction, LAMPORTS_PER_SOL } from '@solana/web3.js';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ROBOWALLET_PROGRAM_ID, SOLANA_RPC_URL } from '../config';
 
 // Next.js dynamic import for the Wallet button to avoid SSR hydration issues
@@ -124,6 +124,8 @@ export default function Dashboard() {
   const [busy, setBusy] = useState<string | null>(null); // 'init' | 'revoke' | 'deposit'
   const [activity, setActivity] = useState<ActivityEntry[]>([]);
   const [activityLoaded, setActivityLoaded] = useState(false);
+  // Decoded tx cache: signatures are immutable, so we never refetch one.
+  const decodeCache = useRef(new Map<string, { kind: ActivityEntry['kind']; amount: number | null }>());
 
   // ----- PDA derivation -----
   useEffect(() => {
@@ -183,39 +185,43 @@ export default function Dashboard() {
       // Decoded program activity
       try {
         const sigs = await connection.getSignaturesForAddress(PROGRAM_KEY, { limit: 10 });
-        const txs = await connection.getParsedTransactions(
-          sigs.map((s) => s.signature),
-          { maxSupportedTransactionVersion: 0 }
-        );
-        // Key decoded info by each tx's own signature — array order from the
-        // RPC is not guaranteed to match the requested signature order.
-        const decodedBySig = new Map<string, { kind: ActivityEntry['kind']; amount: number | null }>();
-        for (const tx of txs) {
-          if (!tx) continue;
-          let kind: ActivityEntry['kind'] = 'other';
-          let amount: number | null = null;
-          for (const ix of tx.transaction.message.instructions) {
-            const pid = 'programId' in ix ? ix.programId.toBase58() : '';
-            if (pid === ROBOWALLET_PROGRAM_ID && 'data' in ix) {
-              const raw = b58decode(ix.data);
-              const disc = toHex(raw.slice(0, 8));
-              if (disc === DISC.execute) {
-                kind = 'payment';
-                if (raw.length >= 16) amount = readU64LE(raw, 8);
-              } else if (disc === DISC.initialize) {
-                kind = 'initialize';
-                if (raw.length >= 48) amount = readU64LE(raw, 40);
-              } else if (disc === DISC.close) {
-                kind = 'close';
+        // Fetch unseen transactions one by one — batched getParsedTransactions
+        // exceeds free-tier RPC batch limits (HTTP 413). Signatures are
+        // immutable, so each is decoded once and cached forever.
+        for (const s of sigs) {
+          if (decodeCache.current.has(s.signature)) continue;
+          try {
+            const tx = await connection.getParsedTransaction(s.signature, {
+              maxSupportedTransactionVersion: 0,
+            });
+            if (!tx) continue;
+            let kind: ActivityEntry['kind'] = 'other';
+            let amount: number | null = null;
+            for (const ix of tx.transaction.message.instructions) {
+              const pid = 'programId' in ix ? ix.programId.toBase58() : '';
+              if (pid === ROBOWALLET_PROGRAM_ID && 'data' in ix) {
+                const raw = b58decode(ix.data);
+                const disc = toHex(raw.slice(0, 8));
+                if (disc === DISC.execute) {
+                  kind = 'payment';
+                  if (raw.length >= 16) amount = readU64LE(raw, 8);
+                } else if (disc === DISC.initialize) {
+                  kind = 'initialize';
+                  if (raw.length >= 48) amount = readU64LE(raw, 40);
+                } else if (disc === DISC.close) {
+                  kind = 'close';
+                }
+              } else if (pid === 'BPFLoaderUpgradeab1e11111111111111111111111' && kind === 'other') {
+                kind = 'deploy';
               }
-            } else if (pid === 'BPFLoaderUpgradeab1e11111111111111111111111' && kind === 'other') {
-              kind = 'deploy';
             }
+            decodeCache.current.set(s.signature, { kind, amount });
+          } catch {
+            // transient fetch failure — leave uncached, retry next poll
           }
-          decodedBySig.set(tx.transaction.signatures[0], { kind, amount });
         }
         const entries: ActivityEntry[] = sigs.map((s) => {
-          const decoded = decodedBySig.get(s.signature) ?? { kind: 'other' as const, amount: null };
+          const decoded = decodeCache.current.get(s.signature) ?? { kind: 'other' as const, amount: null };
           return {
             signature: s.signature,
             slot: s.slot,
