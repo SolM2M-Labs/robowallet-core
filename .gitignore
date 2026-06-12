@@ -29,3 +29,6 @@ marketing/
 sdk/dist/
 sdk/dist-cjs/
 *.tgz
+
+# Generated firmware binary (build artifact)
+flasher/firmware.bin

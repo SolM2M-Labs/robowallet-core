@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>RoboWallet — Flash your ESP32</title>
+  <!-- ESP Web Tools: flash firmware straight from the browser over WebSerial -->
+  <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
+  <style>
+    :root {
+      --bg: #090a0f; --panel: rgba(20,24,32,0.7); --text: #fff;
+      --muted: #8b949e; --purple: #9945FF; --border: #2d313d;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; background: var(--bg); color: var(--text);
+      font-family: 'Inter', system-ui, sans-serif;
+      display: flex; align-items: center; justify-content: center; padding: 24px;
+      background-image:
+        radial-gradient(circle at 100% 0%, rgba(153,69,255,0.15) 0%, transparent 40%),
+        radial-gradient(circle at 0% 100%, rgba(250,204,21,0.08) 0%, transparent 40%);
+    }
+    .card {
+      max-width: 560px; width: 100%; background: var(--panel); backdrop-filter: blur(10px);
+      border: 1px solid var(--border); border-radius: 16px; padding: 40px; text-align: center;
+    }
+    h1 { font-size: 2rem; margin: 0 0 8px; letter-spacing: -1px; }
+    .sub { color: var(--muted); line-height: 1.6; margin: 0 0 28px; }
+    esp-web-install-button { display: inline-block; }
+    esp-web-install-button[install-unsupported] { display: none; }
+    .btn-fallback {
+      display: none; color: #ffbd2e; font-size: 0.9rem; margin-top: 16px;
+    }
+    esp-web-install-button[install-unsupported] ~ .btn-fallback { display: block; }
+    .steps {
+      text-align: left; margin-top: 32px; padding-top: 24px;
+      border-top: 1px solid var(--border); color: var(--muted); font-size: 0.9rem; line-height: 1.7;
+    }
+    .steps ol { margin: 8px 0 0; padding-left: 20px; }
+    code { font-family: ui-monospace, monospace; color: var(--purple); }
+    a { color: #FACC15; }
+    .footer { margin-top: 24px; font-size: 0.8rem; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Flash your ESP32</h1>
+    <p class="sub">
+      Install the RoboWallet firmware directly from your browser — no Arduino IDE, no toolchain.
+      Connect an ESP32-C3 over USB and click below.
+    </p>
+
+    <esp-web-install-button manifest="./manifest.json">
+      <button slot="activate" style="
+        background: rgba(153,69,255,0.2); border: 1px solid var(--purple); color: #c79bff;
+        font-weight: 700; padding: 14px 28px; border-radius: 10px; cursor: pointer; font-size: 1rem;">
+        ⚡ Connect &amp; Flash
+      </button>
+    </esp-web-install-button>
+    <p class="btn-fallback">
+      Your browser doesn't support WebSerial. Use desktop Chrome, Edge, or Opera.
+    </p>
+
+    <div class="steps">
+      <strong>After flashing</strong>
+      <ol>
+        <li>The device prints its Solana address over serial — fund it with devnet SOL for fees.</li>
+        <li>Run the gateway near the device: <code>node scripts/roborelay.js</code></li>
+        <li>Configure Wi-Fi and the gateway address, then watch it pay on-chain.</li>
+      </ol>
+      <p>Full guide: <a href="https://robowallet-core.vercel.app/docs">robowallet-core.vercel.app/docs</a></p>
+    </div>
+
+    <p class="footer">
+      Powered by <a href="https://esphome.github.io/esp-web-tools/">ESP Web Tools</a> ·
+      <a href="https://github.com/SolM2M-Labs/robowallet-core">Source</a>
+    </p>
+  </div>
+</body>
+</html>
