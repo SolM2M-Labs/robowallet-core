@@ -30,7 +30,7 @@ export default function LandingPage() {
             The Machine<br/>Economy is Here.
           </h1>
           <p className="hero-subtitle">
-            A military-grade, zero-allocation embedded SDK that turns $5 microcontrollers into autonomous economic agents on the Solana blockchain.
+            A zero-allocation embedded SDK that turns $5 microcontrollers into autonomous economic agents on Solana — with on-chain spending limits protecting every device.
           </p>
           
           <div className="hero-cta-group">
@@ -39,7 +39,7 @@ export default function LandingPage() {
           </div>
           
           <div className="tech-stack">
-            <span>Backed By:</span>
+            <span>Built With:</span>
             <div className="tech-logos">
               <span>Rust</span>
               <span className="separator">•</span>
@@ -63,9 +63,10 @@ export default function LandingPage() {
             <div className="terminal-body" id="terminal-text">
               <p><span className="prompt">&gt;&gt;</span> boot sequence initiated...</p>
               <p><span className="prompt">&gt;&gt;</span> loading esp-hal (risc-v)... <span className="success">[OK]</span></p>
-              <p><span className="prompt">&gt;&gt;</span> generating ed25519 keypair... <span className="success">[OK]</span></p>
-              <p><span className="prompt">&gt;&gt;</span> solana address: <span className="accent">4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R</span></p>
-              <p><span className="prompt">&gt;&gt;</span> building transfer 5,000,000 lamports... <span className="success">[SIGNED]</span></p>
+              <p><span className="prompt">&gt;&gt;</span> deriving ed25519 key from TRNG... <span className="success">[OK]</span></p>
+              <p><span className="prompt">&gt;&gt;</span> fetching latest blockhash... <span className="success">[OK]</span></p>
+              <p><span className="prompt">&gt;&gt;</span> signing transfer 5,000,000 lamports on-stack... <span className="success">[SIGNED]</span></p>
+              <p><span className="prompt">&gt;&gt;</span> broadcast: <span className="accent">5jpmsfgeQtga…u51oxEjz</span> <span className="success">[FINALIZED]</span></p>
               <p className="blink-cursor">_</p>
             </div>
           </div>
@@ -83,7 +84,7 @@ export default function LandingPage() {
           <div className="feature-card">
             <div className="icon" style={{ fontSize: '36px', marginBottom: '24px' }}>🔒</div>
             <h3>Hardware Security</h3>
-            <p>Native integration with ATECC608 secure elements. Private keys never touch the main application processor.</p>
+            <p>Keys derived on-device from the hardware TRNG and never leave the chip. On-chain session limits cap the damage even if a device is stolen.</p>
           </div>
           <div className="feature-card">
             <div className="icon" style={{ fontSize: '36px', marginBottom: '24px' }}>🤖</div>

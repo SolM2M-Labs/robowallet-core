@@ -4,145 +4,258 @@ import Link from 'next/link';
 import { useState } from 'react';
 import '../landing.css';
 
-export default function DocsPage() {
-  const [activeTab, setActiveTab] = useState<string>("intro");
+const codeBlockStyle: React.CSSProperties = {
+  background: '#050608',
+  border: '1px solid var(--border-dim)',
+  padding: '16px',
+  borderRadius: '4px',
+  overflowX: 'auto',
+  fontFamily: 'var(--font-mono)',
+  fontSize: '0.85rem',
+  color: '#a0aec0',
+  lineHeight: '1.5',
+};
 
-  const sections = {
-    intro: {
-      title: "Introduction to RoboWallet Core",
-      subtitle: "Enabling the Solana Machine Economy on Microcontrollers",
-      content: (
-        <div>
-          <p style={{ lineHeight: '1.7', color: 'var(--text-muted)', marginBottom: '16px' }}>
-            RoboWallet is a lightweight, zero-allocation, <code>no_std</code> embedded SDK and smart contract framework designed to let physical IoT devices and microcontrollers act as autonomous economic agents on the Solana blockchain.
-          </p>
-          <div style={{ background: 'rgba(255,255,255,0.02)', borderLeft: '3px solid var(--accent-yellow)', padding: '16px', margin: '20px 0', borderRadius: '4px' }}>
-            <h4 style={{ color: 'var(--text-main)', marginBottom: '6px' }}>Core Architectural Principles</h4>
-            <ul style={{ listStyleType: 'disc', paddingLeft: '20px', color: 'var(--text-muted)', lineHeight: '1.6' }}>
-              <li><strong>Zero Heap Memory Allocation:</strong> Avoids fragmentation and runtime crashes on embedded hardware.</li>
-              <li><strong>Hardware-Offloaded Security:</strong> Built-in FFI support for secure elements like the ATECC608A.</li>
-              <li><strong>Session Key PDA Delegation:</strong> Restricts financial blast radius using on-chain smart contracts.</li>
-            </ul>
-          </div>
-        </div>
-      )
-    },
-    rust: {
-      title: "Rust Core SDK (no_std)",
-      subtitle: "Low-level system serialization & cryptography",
-      content: (
-        <div>
-          <p style={{ lineHeight: '1.7', color: 'var(--text-muted)', marginBottom: '16px' }}>
-            The core library is written in strictly <code>no_std</code> Rust to compile to under 150KB of flash, making it compatible with ESP32 Xtensa and RISC-V architectures.
-          </p>
-          <h4 style={{ color: 'var(--text-main)', margin: '20px 0 10px 0' }}>Example: Construction of transaction message in Rust</h4>
-          <pre style={{ background: '#050608', border: '1px solid var(--border-dim)', padding: '16px', borderRadius: '4px', overflowX: 'auto', fontFamily: 'var(--font-mono)', fontSize: '0.85rem', color: '#a0aec0', lineHeight: '1.5' }}>
-{`// Bounded stack vector for Solana Transaction
-pub struct TransactionBuffer<'a> {
-    pub num_signatures: u8,
-    pub signatures: &'a mut [u8], 
-    pub recent_blockhash: [u8; 32],
-    pub instructions: heapless::Vec<CompiledInstruction, 4>,
-}
+const bodyText: React.CSSProperties = {
+  lineHeight: '1.7',
+  color: 'var(--text-muted)',
+  marginBottom: '16px',
+};
 
-impl<'a> TransactionBuffer<'a> {
-    pub fn new(receiver: [u8; 32], lamports: u64, hash: [u8; 32]) -> Self {
-        // Zero-allocation initialization
-    }
-}`}
-          </pre>
+const h4Style: React.CSSProperties = {
+  color: 'var(--text-main)',
+  margin: '20px 0 10px 0',
+};
+
+const PROGRAM_ID = 'ArgvLnQ5UhqJ9Ks7JF7nycbUJNzAgwR136LqzBNCCux9';
+
+const TABS: { id: string; label: string; title: string; subtitle: string; content: React.ReactNode }[] = [
+  {
+    id: 'intro',
+    label: '🚀 Getting Started',
+    title: 'Introduction to RoboWallet Core',
+    subtitle: 'Enabling the Solana Machine Economy on Microcontrollers',
+    content: (
+      <div>
+        <p style={bodyText}>
+          RoboWallet is a lightweight, zero-allocation, <code>no_std</code> embedded SDK and smart
+          contract framework that lets IoT devices and microcontrollers act as autonomous economic
+          agents on the Solana blockchain.
+        </p>
+        <div style={{ background: 'rgba(255,255,255,0.02)', borderLeft: '3px solid var(--accent-yellow)', padding: '16px', margin: '20px 0', borderRadius: '4px' }}>
+          <h4 style={{ color: 'var(--text-main)', marginBottom: '6px' }}>Core Architectural Principles</h4>
+          <ul style={{ listStyleType: 'disc', paddingLeft: '20px', color: 'var(--text-muted)', lineHeight: '1.6' }}>
+            <li><strong>Zero Heap Allocation:</strong> every transaction is built and signed in stack buffers — no fragmentation, no runtime allocator surprises.</li>
+            <li><strong>On-Chain Spending Limits:</strong> the session-vault program enforces budgets at the protocol level, so a stolen device cannot overspend.</li>
+            <li><strong>Verified Wire Format:</strong> the embedded builder&apos;s output is validated byte-for-byte against <code>@solana/web3.js</code> in CI scripts.</li>
+          </ul>
         </div>
-      )
-    },
-    arduino: {
-      title: "C/C++ & Arduino IDE Integration",
-      subtitle: "Exposing Rust Core to C++ microcontrollers",
-      content: (
-        <div>
-          <p style={{ lineHeight: '1.7', color: 'var(--text-muted)', marginBottom: '16px' }}>
-            Using Rust's Foreign Function Interface (FFI), the SDK compiles to a standard static library (<code>librobowallet_core.a</code>) that can be imported directly into C++ and Arduino IDE projects.
-          </p>
-          <h4 style={{ color: 'var(--text-main)', margin: '20px 0 10px 0' }}>Directory structure of the Arduino Library</h4>
-          <pre style={{ background: '#050608', border: '1px solid var(--border-dim)', padding: '16px', borderRadius: '4px', overflowX: 'auto', fontFamily: 'var(--font-mono)', fontSize: '0.85rem', color: '#a0aec0', lineHeight: '1.5' }}>
+        <p style={bodyText}>
+          Devnet program: <code style={{ color: 'var(--accent-yellow)' }}>{PROGRAM_ID}</code>
+        </p>
+      </div>
+    ),
+  },
+  {
+    id: 'rust',
+    label: '🦀 Rust Core SDK',
+    title: 'Rust Core SDK (no_std)',
+    subtitle: 'Real Solana transactions from stack buffers',
+    content: (
+      <div>
+        <p style={bodyText}>
+          The core library is strictly <code>no_std</code> and compiles for RISC-V (ESP32-C3) and
+          other bare-metal targets. It produces genuine Solana wire-format transactions — header,
+          account keys, blockhash, compiled instructions and the Ed25519 signature — entirely on
+          the stack.
+        </p>
+        <h4 style={h4Style}>Build and sign a transfer on-device</h4>
+        <pre style={codeBlockStyle}>
+{`use robowallet_core::crypto::RoboKeypair;
+use robowallet_core::transaction::build_signed_transfer;
+
+// Device identity: seed from the hardware TRNG or a secure element
+let keypair = RoboKeypair::from_seed(&seed);
+
+// Fully-signed transaction in a stack buffer — no heap
+let mut tx = [0u8; 512];
+let len = build_signed_transfer(
+    &keypair.secret,
+    &receiver,          // [u8; 32]
+    5_000_000,          // lamports (0.005 SOL)
+    &recent_blockhash,  // [u8; 32], from getLatestBlockhash
+    &mut tx,
+)?;
+
+// tx[..len] is broadcast-ready: base64-encode and POST via sendTransaction`}
+        </pre>
+        <p style={bodyText}>
+          For session-vault payments, <code>build_execute_payment</code> produces the
+          spending-limit-protected program call with the same stack-only guarantees. Run{' '}
+          <code>scripts/verify_core_tx.js</code> to confirm the output is byte-identical to a
+          web3.js-built transaction.
+        </p>
+      </div>
+    ),
+  },
+  {
+    id: 'arduino',
+    label: '🔌 C++ & Arduino FFI',
+    title: 'C/C++ & Arduino IDE Integration',
+    subtitle: 'Exposing the Rust core to C++ microcontrollers',
+    content: (
+      <div>
+        <p style={bodyText}>
+          The SDK compiles to a static library (<code>librobowallet_core.a</code>) with a C ABI,
+          wrapped in an Arduino-friendly C++ class.
+        </p>
+        <h4 style={h4Style}>Library layout</h4>
+        <pre style={codeBlockStyle}>
 {`Arduino/libraries/RoboWallet/
 ├── library.properties
 ├── src/
-│   ├── robowallet.h          <-- Raw C FFI declarations
-│   ├── RoboWallet.h          <-- C++ Wrapper Class header
-│   ├── RoboWallet.cpp        <-- C++ Class implementation
-│   └── librobowallet_core.a  <-- Compiled Rust static binary
+│   ├── robowallet_ffi.h      <-- C FFI declarations
+│   ├── robowallet.h          <-- C++ wrapper class
+│   ├── RoboWallet.cpp
+│   └── librobowallet_core.a  <-- Compiled Rust static library
 └── examples/
     └── SendTransfer/`}
-          </pre>
-          <h4 style={{ color: 'var(--text-main)', margin: '20px 0 10px 0' }}>Using the C++ class in Arduino</h4>
-          <pre style={{ background: '#050608', border: '1px solid var(--border-dim)', padding: '16px', borderRadius: '4px', overflowX: 'auto', fontFamily: 'var(--font-mono)', fontSize: '0.85rem', color: '#a0aec0', lineHeight: '1.5' }}>
+        </pre>
+        <h4 style={h4Style}>Using the C++ class</h4>
+        <pre style={codeBlockStyle}>
 {`#include <RoboWallet.h>
 RoboWallet wallet;
 
 void setup() {
-  String address = wallet.generateTestWallet();
-  Serial.println("Public Key: " + address);
-  
-  uint8_t receiver[32] = {0}; 
-  uint8_t blockhash[32] = {9};
-  wallet.buildAndSignTransfer(receiver, 5000000, blockhash);
-}`}
-          </pre>
-        </div>
-      )
-    },
-    anchor: {
-      title: "Solana Session Key Smart Contract",
-      subtitle: "Anchor on-chain transaction spending limits",
-      content: (
-        <div>
-          <p style={{ lineHeight: '1.7', color: 'var(--text-muted)', marginBottom: '16px' }}>
-            To safeguard hardware devices from being stolen, the owner wallet delegates a specific amount of funds to a Program Derived Address (PDA) called a Session Vault.
-          </p>
-          <h4 style={{ color: 'var(--text-main)', margin: '20px 0 10px 0' }}>Anchor PDA Seed Validation</h4>
-          <pre style={{ background: '#050608', border: '1px solid var(--border-dim)', padding: '16px', borderRadius: '4px', overflowX: 'auto', fontFamily: 'var(--font-mono)', fontSize: '0.85rem', color: '#a0aec0', lineHeight: '1.5' }}>
-{`#[derive(Accounts)]
-#[instruction(device_key: Pubkey)]
-pub struct InitializeSession<'info> {
-    #[account(
-        init,
-        payer = owner,
-        space = 8 + SessionState::INIT_SPACE,
-        seeds = [b"session", owner.key().as_ref(), device_key.as_ref()],
-        bump
-    )]
-    pub session_state: Account<'info, SessionState>,
-    #[account(mut)]
-    pub owner: Signer<'info>,
-    pub system_program: Program<'info, System>,
-}`}
-          </pre>
-        </div>
-      )
-    },
-    simulator: {
-      title: "M2M Device Simulator",
-      subtitle: "Testing transaction broadcasting",
-      content: (
-        <div>
-          <p style={{ lineHeight: '1.7', color: 'var(--text-muted)', marginBottom: '16px' }}>
-            We provide a Node.js-based device simulator to test the exact binary serialization and keypair signatures without needing physical ESP32 hardware connected.
-          </p>
-          <h4 style={{ color: 'var(--text-main)', margin: '20px 0 10px 0' }}>How to run the simulator</h4>
-          <pre style={{ background: '#050608', border: '1px solid var(--border-dim)', padding: '16px', borderRadius: '4px', overflowX: 'auto', fontFamily: 'var(--font-mono)', fontSize: '0.85rem', color: '#a0aec0', lineHeight: '1.5' }}>
-{`# Navigate to scripts directory
-cd scripts
+  // Device identity from the hardware TRNG
+  uint8_t seed[32];
+  for (int i = 0; i < 32; i += 4) {
+    uint32_t r = esp_random();
+    memcpy(seed + i, &r, 4);
+  }
+  wallet.setSeed(seed);
+  Serial.println(wallet.getAddress());  // Base58 Solana address
 
-# Install dependencies (@solana/web3.js and bs58)
-npm install
+  // Fully-signed, broadcast-ready transaction bytes
+  uint8_t tx[256];
+  int32_t len = wallet.buildSignedTransfer(
+      receiver, 5000000ULL, blockhash, tx, sizeof(tx));
+}`}
+        </pre>
+      </div>
+    ),
+  },
+  {
+    id: 'anchor',
+    label: '🔑 Session Smart Contract',
+    title: 'Solana Session Key Smart Contract',
+    subtitle: 'On-chain spending limits for device keys',
+    content: (
+      <div>
+        <p style={bodyText}>
+          The owner wallet delegates a budget to a Program Derived Address — the <em>Session
+          Vault</em> — bound to one device key. The program enforces the limit on every payment,
+          so a stolen device can never spend beyond it.
+        </p>
+        <h4 style={h4Style}>PDA seed validation</h4>
+        <pre style={codeBlockStyle}>
+{`#[account(
+    init,
+    payer = owner,
+    space = 8 + SessionState::INIT_SPACE,
+    seeds = [b"session", owner.key().as_ref(), device_key.as_ref()],
+    bump
+)]
+pub session_state: Account<'info, SessionState>,`}
+        </pre>
+        <h4 style={h4Style}>Limit enforcement in execute_payment</h4>
+        <pre style={codeBlockStyle}>
+{`let new_total = session_state
+    .total_spent
+    .checked_add(amount)
+    .ok_or(ErrorCode::AmountOverflow)?;
+require!(
+    new_total <= session_state.spending_limit,
+    ErrorCode::SpendingLimitExceeded
+);
 
-# Run the simulator
-node mock_device.js`}
-          </pre>
-        </div>
-      )
-    }
-  };
+// PDAs carry data, so lamports move by direct debit/credit:
+**session_info.try_borrow_mut_lamports()? -= amount;
+**ctx.accounts.target.try_borrow_mut_lamports()? += amount;`}
+        </pre>
+        <p style={bodyText}>
+          <code>close_session</code> lets the owner revoke at any time, recovering rent and any
+          unspent balance.
+        </p>
+      </div>
+    ),
+  },
+  {
+    id: 'gateway',
+    label: '📡 Device Gateway',
+    title: 'RoboRelay Gateway',
+    subtitle: 'Bridging device HTTP to TLS-only Solana RPC',
+    content: (
+      <div>
+        <p style={bodyText}>
+          Public Solana RPC endpoints require HTTPS, while bare-metal boards speak plain HTTP over
+          TCP. RoboRelay is a tiny LAN gateway: run it on any machine near your fleet (laptop,
+          Raspberry Pi, the robot&apos;s host computer) and point the firmware&apos;s{' '}
+          <code>GATEWAY_IP</code> at it.
+        </p>
+        <pre style={codeBlockStyle}>
+{`# forward devices to your devnet RPC
+SOLANA_RPC_URL=https://devnet.helius-rpc.com/?api-key=... \\
+  node scripts/roborelay.js
+
+# RoboRelay — device-to-Solana RPC gateway
+# Listening: http://192.168.1.14:8899  <- set this as GATEWAY_IP`}
+        </pre>
+        <p style={bodyText}>
+          The firmware then runs the full two-step flow on its own: fetch the latest blockhash,
+          sign the transaction on-stack, and broadcast it — the gateway only forwards bytes and
+          never sees a private key.
+        </p>
+      </div>
+    ),
+  },
+  {
+    id: 'simulator',
+    label: '🖥️ Verification Suite',
+    title: 'Simulators & On-Chain Verification',
+    subtitle: 'Prove every layer without hardware',
+    content: (
+      <div>
+        <p style={bodyText}>
+          Every claim in this documentation is backed by a runnable script:
+        </p>
+        <pre style={codeBlockStyle}>
+{`cd scripts && npm install
+
+# Device simulator: builds and broadcasts a session payment
+node mock_device.js
+
+# Embedded builder vs web3.js: byte-for-byte comparison
+node verify_core_tx.js
+
+# Full on-chain lifecycle: initialize -> fund -> pay ->
+# over-limit rejection -> close with rent recovery
+SOLANA_RPC_URL=<devnet rpc> node verify_program.js`}
+        </pre>
+        <p style={bodyText}>
+          The firmware pipeline itself (HTTP framing, blockhash parsing, on-stack signing) can be
+          exercised end-to-end from a host machine with{' '}
+          <code>txgen flow</code> against a running RoboRelay — the same code paths the ESP32
+          executes.
+        </p>
+      </div>
+    ),
+  },
+];
+
+export default function DocsPage() {
+  const [activeTab, setActiveTab] = useState<string>('intro');
+  const active = TABS.find((t) => t.id === activeTab) ?? TABS[0];
 
   return (
     <div className="landing-wrapper" style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
@@ -167,115 +280,43 @@ node mock_device.js`}
 
       {/* Main Docs Section */}
       <div style={{ display: 'flex', flex: 1, zIndex: 10, padding: '40px 60px', gap: '40px', maxWidth: '1440px', width: '100%', margin: '0 auto' }}>
-        
+
         {/* Sidebar */}
         <aside style={{ width: '280px', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: '8px' }}>
           <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', marginBottom: '16px', color: 'var(--text-main)', letterSpacing: '1px', textTransform: 'uppercase' }}>Documentation</h3>
-          <button 
-            onClick={() => setActiveTab("intro")}
-            style={{ 
-              background: activeTab === "intro" ? 'rgba(250, 204, 21, 0.1)' : 'transparent',
-              border: '1px solid',
-              borderColor: activeTab === "intro" ? 'var(--accent-yellow)' : 'transparent',
-              color: activeTab === "intro" ? 'var(--accent-yellow)' : 'var(--text-muted)',
-              textAlign: 'left',
-              padding: '12px 16px',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontWeight: 600,
-              fontSize: '0.9rem',
-              transition: 'all 0.2s'
-            }}
-          >
-            🚀 Getting Started
-          </button>
-          <button 
-            onClick={() => setActiveTab("rust")}
-            style={{ 
-              background: activeTab === "rust" ? 'rgba(250, 204, 21, 0.1)' : 'transparent',
-              border: '1px solid',
-              borderColor: activeTab === "rust" ? 'var(--accent-yellow)' : 'transparent',
-              color: activeTab === "rust" ? 'var(--accent-yellow)' : 'var(--text-muted)',
-              textAlign: 'left',
-              padding: '12px 16px',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontWeight: 600,
-              fontSize: '0.9rem',
-              transition: 'all 0.2s'
-            }}
-          >
-            🦀 Rust Core SDK
-          </button>
-          <button 
-            onClick={() => setActiveTab("arduino")}
-            style={{ 
-              background: activeTab === "arduino" ? 'rgba(250, 204, 21, 0.1)' : 'transparent',
-              border: '1px solid',
-              borderColor: activeTab === "arduino" ? 'var(--accent-yellow)' : 'transparent',
-              color: activeTab === "arduino" ? 'var(--accent-yellow)' : 'var(--text-muted)',
-              textAlign: 'left',
-              padding: '12px 16px',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontWeight: 600,
-              fontSize: '0.9rem',
-              transition: 'all 0.2s'
-            }}
-          >
-            🔌 C++ & Arduino FFI
-          </button>
-          <button 
-            onClick={() => setActiveTab("anchor")}
-            style={{ 
-              background: activeTab === "anchor" ? 'rgba(250, 204, 21, 0.1)' : 'transparent',
-              border: '1px solid',
-              borderColor: activeTab === "anchor" ? 'var(--accent-yellow)' : 'transparent',
-              color: activeTab === "anchor" ? 'var(--accent-yellow)' : 'var(--text-muted)',
-              textAlign: 'left',
-              padding: '12px 16px',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontWeight: 600,
-              fontSize: '0.9rem',
-              transition: 'all 0.2s'
-            }}
-          >
-            🔑 Session Smart Contract
-          </button>
-          <button 
-            onClick={() => setActiveTab("simulator")}
-            style={{ 
-              background: activeTab === "simulator" ? 'rgba(250, 204, 21, 0.1)' : 'transparent',
-              border: '1px solid',
-              borderColor: activeTab === "simulator" ? 'var(--accent-yellow)' : 'transparent',
-              color: activeTab === "simulator" ? 'var(--accent-yellow)' : 'var(--text-muted)',
-              textAlign: 'left',
-              padding: '12px 16px',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontWeight: 600,
-              fontSize: '0.9rem',
-              transition: 'all 0.2s'
-            }}
-          >
-            🖥️ M2M Device Simulator
-          </button>
+          {TABS.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              style={{
+                background: activeTab === tab.id ? 'rgba(250, 204, 21, 0.1)' : 'transparent',
+                border: '1px solid',
+                borderColor: activeTab === tab.id ? 'var(--accent-yellow)' : 'transparent',
+                color: activeTab === tab.id ? 'var(--accent-yellow)' : 'var(--text-muted)',
+                textAlign: 'left',
+                padding: '12px 16px',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontWeight: 600,
+                fontSize: '0.9rem',
+                transition: 'all 0.2s',
+              }}
+            >
+              {tab.label}
+            </button>
+          ))}
         </aside>
 
         {/* Content Panel */}
         <main className="glass-panel" style={{ flex: 1, padding: '40px', display: 'flex', flexDirection: 'column', minHeight: '500px', background: 'rgba(9, 10, 15, 0.75)' }}>
           <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '2.5rem', fontWeight: 700, color: 'var(--text-main)', marginBottom: '8px', letterSpacing: '-0.5px' }}>
-            {sections[activeTab as keyof typeof sections].title}
+            {active.title}
           </h1>
           <p style={{ color: 'var(--accent-yellow)', fontFamily: 'var(--font-mono)', fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '30px' }}>
-            {sections[activeTab as keyof typeof sections].subtitle}
+            {active.subtitle}
           </p>
-          <div style={{ flex: 1 }}>
-            {sections[activeTab as keyof typeof sections].content}
-          </div>
+          <div style={{ flex: 1 }}>{active.content}</div>
         </main>
-
       </div>
 
       {/* Footer */}
