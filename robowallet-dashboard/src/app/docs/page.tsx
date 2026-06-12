@@ -123,9 +123,9 @@ cd ../core && cargo build --release`}
       <div>
         <p style={bodyText}>
           The core library is strictly <code>no_std</code> and compiles for RISC-V (ESP32-C3) and
-          other bare-metal targets. It produces genuine Solana wire-format transactions — header,
-          account keys, blockhash, compiled instructions and the Ed25519 signature — entirely on
-          the stack.
+          other bare-metal targets — no allocator required by the SDK itself. It produces genuine
+          Solana wire-format transactions — header, account keys, blockhash, compiled instructions
+          and the Ed25519 signature — entirely on the stack.
         </p>
         <h4 style={h4Style}>Build and sign a transfer on-device</h4>
         <pre style={codeBlockStyle}>
