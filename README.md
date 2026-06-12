@@ -51,10 +51,24 @@ device key at all.
 | Directory | What it is |
 |---|---|
 | [`core/`](core) | `no_std` Rust SDK: Ed25519 keys, real Solana wire-format transactions, Base58/compact-u16 encoders, JSON-RPC framing — all stack-allocated, no heap |
+| [`sdk/`](sdk) | TypeScript SDK ([`robowallet-sdk`](https://www.npmjs.com/package/robowallet-sdk) on npm): PDA derivation, instruction builders, state decoding |
 | [`bindings/arduino/`](bindings/arduino) | Arduino IDE library (C++ wrapper over the Rust FFI) for ESP32 boards |
 | [`robowallet_program/`](robowallet_program) | Anchor program: `initialize_session`, `execute_payment` (limit-enforced), `close_session` |
 | [`robowallet-dashboard/`](robowallet-dashboard) | Next.js fleet dashboard: live decoded program activity, session vault state, deposit/revoke |
+| [`flasher/`](flasher) | Browser-based ESP32 firmware installer (ESP Web Tools) |
 | [`scripts/`](scripts) | Device simulator and end-to-end on-chain verification suites |
+
+## Install the TypeScript SDK
+
+```bash
+npm install robowallet-sdk @solana/web3.js
+```
+
+```ts
+import { initializeSessionInstruction, executePaymentInstruction } from 'robowallet-sdk';
+```
+
+See [`sdk/README.md`](sdk/README.md) for the full API.
 
 ## How a payment works
 

@@ -32,3 +32,7 @@ sdk/dist-cjs/
 
 # Generated firmware binary (build artifact)
 flasher/firmware.bin
+
+# npm auth (never commit)
+.npmrc
+sdk/.npmrc
