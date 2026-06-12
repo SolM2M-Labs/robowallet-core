@@ -1,0 +1,55 @@
+{
+  "name": "robowallet-sdk",
+  "version": "0.1.0",
+  "description": "TypeScript helpers for the RoboWallet on-chain program — session-key vaults with on-chain spending limits for machine-to-machine payments on Solana.",
+  "keywords": [
+    "solana",
+    "depin",
+    "iot",
+    "machine-to-machine",
+    "session-keys",
+    "web3",
+    "robowallet"
+  ],
+  "license": "MIT",
+  "homepage": "https://robowallet-core.vercel.app",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SolM2M-Labs/robowallet-core.git",
+    "directory": "sdk"
+  },
+  "bugs": {
+    "url": "https://github.com/SolM2M-Labs/robowallet-core/issues"
+  },
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "node build.mjs",
+    "prepublishOnly": "npm run build"
+  },
+  "peerDependencies": {
+    "@solana/web3.js": "^1.90.0"
+  },
+  "devDependencies": {
+    "@solana/web3.js": "^1.98.4",
+    "typescript": "^5.5.0"
+  },
+  "sideEffects": false,
+  "publishConfig": {
+    "access": "public"
+  }
+}

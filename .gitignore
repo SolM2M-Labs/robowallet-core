@@ -24,3 +24,8 @@ robowallet-dashboard/AGENTS.md
 
 # Local marketing kit
 marketing/
+
+# SDK build artifacts
+sdk/dist/
+sdk/dist-cjs/
+*.tgz
