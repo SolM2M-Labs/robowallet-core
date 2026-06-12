@@ -57,6 +57,64 @@ const TABS: { id: string; label: string; title: string; subtitle: string; conten
     ),
   },
   {
+    id: 'quickstart',
+    label: '⚡ Quickstart',
+    title: 'Your First Machine Payment',
+    subtitle: 'Zero to an on-chain, limit-enforced payment in ~10 minutes',
+    content: (
+      <div>
+        <h4 style={h4Style}>1. Clone and install</h4>
+        <pre style={codeBlockStyle}>
+{`git clone https://github.com/SolM2M-Labs/robowallet-core
+cd robowallet-core/scripts
+npm install`}
+        </pre>
+
+        <h4 style={h4Style}>2. Get a devnet RPC</h4>
+        <p style={bodyText}>
+          Create a free key at helius.dev (or any provider) and copy the <em>devnet</em> RPC URL.
+          The public <code>api.devnet.solana.com</code> works too, but rate-limits aggressively.
+        </p>
+
+        <h4 style={h4Style}>3. Run the full lifecycle — no hardware needed</h4>
+        <pre style={codeBlockStyle}>
+{`SOLANA_RPC_URL=<your-devnet-rpc> node verify_program.js`}
+        </pre>
+        <p style={bodyText}>
+          The first run creates <code>scripts/test_owner.json</code> (your local owner wallet) and
+          asks you to fund it with ~0.1 devnet SOL from faucet.solana.com. Run it again after
+          funding and watch it: initialize a session vault → deposit → make a device-signed
+          payment → attempt an over-limit payment (<strong>rejected on-chain</strong>) → close the
+          vault and recover everything. Every signature it prints is a real devnet transaction you
+          can open in the explorer.
+        </p>
+
+        <h4 style={h4Style}>4. Manage sessions from the dashboard</h4>
+        <p style={bodyText}>
+          Open the <Link href="/dashboard" style={{ color: 'var(--accent-yellow)' }}>dashboard</Link>,
+          connect Phantom (set to devnet), paste your device&apos;s public key, choose a spending
+          limit, hit <strong>Initialize</strong>, then <strong>Deposit</strong>. The activity feed
+          decodes every program call live; <strong>Revoke</strong> returns rent and unspent funds
+          any time.
+        </p>
+
+        <h4 style={h4Style}>5. Go hardware</h4>
+        <pre style={codeBlockStyle}>
+{`# bridge devices to the TLS-only RPC
+SOLANA_RPC_URL=<your-devnet-rpc> node roborelay.js
+
+# point the firmware at it (core/src/main.rs: SSID, GATEWAY_IP),
+# then build for ESP32-C3
+cd ../core && cargo build --release`}
+        </pre>
+        <p style={bodyText}>
+          On boot the board derives its key from the hardware TRNG, prints its Solana address
+          (fund it for fees), fetches a blockhash through the relay, signs on-chip and broadcasts.
+        </p>
+      </div>
+    ),
+  },
+  {
     id: 'rust',
     label: '🦀 Rust Core SDK',
     title: 'Rust Core SDK (no_std)',
