@@ -16,6 +16,7 @@ export default function LandingPage() {
         </div>
         <div className="nav-links">
           <a href="#hardware">Hardware</a>
+          <Link href="/playground">Playground</Link>
           <Link href="/docs">Docs</Link>
           <a href="https://x.com/RoboWallet_sdk" target="_blank" rel="noreferrer">Twitter</a>
           <a href="https://github.com/SolM2M-Labs/robowallet-core" target="_blank" rel="noreferrer">GitHub</a>
@@ -34,7 +35,7 @@ export default function LandingPage() {
           </p>
           
           <div className="hero-cta-group">
-            <Link href="/dashboard" className="btn-primary">Initialize SDK</Link>
+            <Link href="/playground" className="btn-primary">Try the Playground</Link>
             <Link href="/docs" className="btn-secondary">View Documentation</Link>
           </div>
           

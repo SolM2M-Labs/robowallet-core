@@ -7,9 +7,9 @@ import {
 } from "@solana/wallet-adapter-react";
 import { WalletAdapterNetwork } from "@solana/wallet-adapter-base";
 import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
-import { clusterApiUrl } from "@solana/web3.js";
 // Default styles that can be overridden by your app
 import "@solana/wallet-adapter-react-ui/styles.css";
+import { SOLANA_RPC_URL } from "../config";
 
 export default function AppWalletProvider({
   children,
@@ -17,7 +17,9 @@ export default function AppWalletProvider({
   children: React.ReactNode;
 }) {
   const network = WalletAdapterNetwork.Devnet;
-  const endpoint = useMemo(() => clusterApiUrl(network), [network]);
+  // Use the configured (dedicated) RPC so the adapter's confirmations don't
+  // hit the public devnet endpoint's rate limits.
+  const endpoint = useMemo(() => SOLANA_RPC_URL, []);
   const wallets = useMemo(
     () => [
       // Manually add wallets here if needed, but Phantom is auto-detected by standard wallet adapter

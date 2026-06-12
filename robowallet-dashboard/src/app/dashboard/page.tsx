@@ -344,6 +344,7 @@ export default function Dashboard() {
         </Link>
         <nav className="sidebar-nav">
           <span className="nav-link active"><span>📊</span> Fleet Dashboard</span>
+          <Link href="/playground" className="nav-link"><span>⚡</span> Playground</Link>
           <Link href="/docs" className="nav-link"><span>📖</span> API Docs</Link>
           <a href="https://github.com/SolM2M-Labs/robowallet-core" target="_blank" rel="noopener noreferrer" className="nav-link">
             <span>🛠️</span> GitHub
