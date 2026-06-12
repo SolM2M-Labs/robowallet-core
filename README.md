@@ -74,7 +74,8 @@ device key at all.
 
 ```bash
 cd core
-cargo build --release            # uses .cargo/config.toml target riscv32imc-unknown-none-elf
+cargo build --release                       # Arduino staticlib (no_std, riscv32imc)
+cargo build --release --features esp --bin robowallet_fw   # ESP32-C3 firmware
 ```
 
 Produces `librobowallet_core.a` for the Arduino library and the `robowallet_fw` firmware image.
@@ -83,14 +84,14 @@ Produces `librobowallet_core.a` for the Arduino library and the `robowallet_fw` 
 
 ```bash
 cd core
-cargo test --no-default-features --target <your-host-triple>
+cargo test --features std-tools --target <your-host-triple>
 ```
 
 ### Verify transactions against web3.js (byte-for-byte)
 
 ```bash
 cd core
-cargo build --bin txgen --no-default-features --features std-tools --target <your-host-triple>
+cargo build --bin txgen --features std-tools --target <your-host-triple>
 cd ../scripts && npm install
 node verify_core_tx.js
 ```

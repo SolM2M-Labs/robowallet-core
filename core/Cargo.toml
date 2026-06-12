@@ -2,6 +2,14 @@
 name = "robowallet_core"
 version = "0.1.0"
 edition = "2021"
+description = "no_std Solana transaction construction and session-key vault helpers for embedded machine-to-machine payments (ESP32, RISC-V, bare-metal)."
+license = "MIT"
+repository = "https://github.com/SolM2M-Labs/robowallet-core"
+homepage = "https://robowallet-core.vercel.app"
+keywords = ["solana", "no_std", "embedded", "depin", "iot"]
+categories = ["embedded", "no-std", "cryptography::cryptocurrencies"]
+readme = "README.md"
+exclude = ["target/", "*.a"]
 
 [lib]
 name = "robowallet_core"
@@ -21,21 +29,23 @@ path = "src/bin/txgen.rs"
 required-features = ["std-tools"]
 
 [features]
-default = ["esp"]
-# Host-only tooling (txgen); never enable together with `esp`.
-std-tools = []
+# Default is the portable no_std library — builds on any host (and on crates.io).
+default = []
+# Firmware target deps (ESP32-C3). Required by the robowallet_fw binary.
 esp = [
     "dep:esp-hal",
     "dep:esp-alloc",
     "dep:esp-wifi",
     "dep:esp-println",
-    "dep:panic-halt",
     "dep:smoltcp",
 ]
+# Host-only tooling (txgen, unit tests) — pulls in std. Never combine with `esp`.
+std-tools = []
 
 [dependencies]
 esp-hal = { version = "1.0.0-rc.0", features = ["esp32c3", "unstable"], optional = true }
-panic-halt = { version = "0.2.0", optional = true }
+# Panic handler for every no_std build (staticlib + firmware); unused under std-tools.
+panic-halt = "0.2.0"
 ed25519-dalek = { version = "2.1.0", default-features = false, features = ["rand_core"] }
 smoltcp = { version = "0.12.0", default-features = false, features = ["medium-ethernet", "proto-ipv4", "proto-ipv6", "socket-tcp", "proto-dhcpv4", "socket-dhcpv4"], optional = true }
 serde = { version = "1.0.228", default-features = false, features = ["derive"] }

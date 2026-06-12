@@ -11,7 +11,7 @@
 //! response parsing, on-stack signing, sendTransaction framing) over a real
 //! TCP connection to a RoboRelay gateway — the same bytes an ESP32 sends.
 //!
-//! Build: cargo build --bin txgen --no-default-features --features std-tools
+//! Build: cargo build --bin txgen --features std-tools --target <host-triple>
 
 use std::io::{Read, Write};
 use std::net::TcpStream;
